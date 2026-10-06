@@ -848,7 +848,7 @@ public class AntMemberExchange {
     public static void doBurstExchange() {
         try {
             fetchDynamicBenefits();
-            int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+            int hour = TimeUtil.getNow().get(Calendar.HOUR_OF_DAY);
             int pointBalance = queryPointBalance();
             if (pointBalance < 0) {
                 return;
@@ -895,7 +895,7 @@ public class AntMemberExchange {
             if (h < 0 || h > 23 || m < 0 || m > 59) {
                 return 0;
             }
-            Calendar c = Calendar.getInstance();
+            Calendar c = TimeUtil.getNow();
             c.set(Calendar.HOUR_OF_DAY, h);
             c.set(Calendar.MINUTE, m);
             c.set(Calendar.SECOND, 0);

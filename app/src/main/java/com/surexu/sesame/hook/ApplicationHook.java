@@ -30,10 +30,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Objects;
 
-import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -261,7 +259,7 @@ public class ApplicationHook {
             try {
                 XHelpers.findAndHookMethod("android.app.Service", classLoader, "onCreate", new XC_MethodHook() {
 
-                    @SuppressLint({"WakelockTimeout", "UnsafeDynamicallyLoadedCode"})
+                    @SuppressLint("WakelockTimeout")
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) {
                         // 1. 获取目标 Service 实例（appService 是 Service 子类，也是 Context 类型）
@@ -418,7 +416,7 @@ public class ApplicationHook {
                                 }
                             }
                         });
-                        dayCalendar = Calendar.getInstance();
+                        dayCalendar = TimeUtil.getNow();
                         Statistics.load();
                         FriendWatch.load();
                         // 重载在后台线程执行，加载成功后会自行置 init=true；此处无需依赖返回值
@@ -507,7 +505,7 @@ public class ApplicationHook {
             unsetWakenAtTimeAlarm();
             try {
                 PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, new Intent("com.eg.android.AlipayGphone.sesame.execute"), getPendingIntentFlag());
-                Calendar calendar = Calendar.getInstance();
+                Calendar calendar = TimeUtil.getNow();
                 calendar.add(Calendar.DAY_OF_MONTH, 1);
                 calendar.set(Calendar.HOUR_OF_DAY, 0);
                 calendar.set(Calendar.MINUTE, 0);
@@ -522,7 +520,7 @@ public class ApplicationHook {
             }
             List<String> wakenAtTimeList = BaseModel.getWakenAtTimeList().getValue();
             if (wakenAtTimeList != null && !wakenAtTimeList.isEmpty()) {
-                Calendar nowCalendar = Calendar.getInstance();
+                Calendar nowCalendar = TimeUtil.getNow();
                 for (int i = 1, len = wakenAtTimeList.size(); i < len; i++) {
                     try {
                         String wakenAtTime = wakenAtTimeList.get(i);
@@ -1431,7 +1429,7 @@ public class ApplicationHook {
     }
 
     public static void updateDay() {
-        Calendar nowCalendar = Calendar.getInstance();
+        Calendar nowCalendar = TimeUtil.getNow();
         try {
             int nowYear = nowCalendar.get(Calendar.YEAR);
             int nowMonth = nowCalendar.get(Calendar.MONTH);
@@ -1473,7 +1471,7 @@ public class ApplicationHook {
             } else {
                 alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation);
             }
-            Log.i("setAlarmTask triggerAtMillis:" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(triggerAtMillis) + " operation:" + (operation == null ? "" : operation.toString()));
+            Log.i("setAlarmTask triggerAtMillis:" + TimeUtil.newDateFormat("yyyy-MM-dd HH:mm:ss").format(triggerAtMillis) + " operation:" + (operation == null ? "" : operation.toString()));
             return true;
         } catch (Throwable th) {
             Log.err(TAG, "setAlarmTask err:", th);

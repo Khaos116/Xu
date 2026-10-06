@@ -19,6 +19,7 @@ import com.surexu.sesame.model.task.consumeGold.ConsumeGold;
 import com.surexu.sesame.model.task.antSports.AntSports;
 import com.surexu.sesame.model.task.antStall.AntStall;
 import com.surexu.sesame.model.task.greenFinance.GreenFinance;
+import com.surexu.sesame.model.task.fish.FishTask;
 import com.surexu.sesame.model.task.goldenbeans.goldenbeans;
 import com.surexu.sesame.model.task.protectEcology.ProtectEcology;
 import lombok.Getter;
@@ -42,6 +43,7 @@ public class ModelOrder {
         clazzList.add(AntSports.class);
         clazzList.add(AntMember.class);
         clazzList.add(GreenFinance.class);
+        clazzList.add(FishTask.class);
         clazzList.add(ConsumeGold.class);
         clazzList.add(goldenbeans.class);
         clazzList.add(AnswerAI.class);

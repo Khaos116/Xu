@@ -20,6 +20,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import com.surexu.sesame.util.TimeUtil;
 import java.util.List;
 
 public class Privilege {
@@ -183,7 +184,7 @@ public class Privilege {
     }
     
     private static boolean isSignInTimeValid() {
-        int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+        int hour = TimeUtil.getNow().get(Calendar.HOUR_OF_DAY);
         return hour >= SIGN_START_HOUR;
     }
     
@@ -213,7 +214,7 @@ public class Privilege {
     
     private static void executeStudentSignIn() {
         try {
-            String tag = Calendar.getInstance().get(Calendar.HOUR_OF_DAY) < SIGN_END_HOUR ? "double" : "single";
+            String tag = TimeUtil.getNow().get(Calendar.HOUR_OF_DAY) < SIGN_END_HOUR ? "double" : "single";
             String response = AntForestRpcCall.studentCheckin();
             JSONObject result = new JSONObject(response);
             handleSignInResult(result, tag);

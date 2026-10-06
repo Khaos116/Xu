@@ -14,7 +14,6 @@ import com.surexu.sesame.model.normal.base.BaseModel;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Locale;
 
 public class Log {
 
@@ -26,7 +25,7 @@ public class Log {
 
         @Override
         protected SimpleDateFormat initialValue() {
-            return new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+            return TimeUtil.newDateFormat("yyyy-MM-dd");
         }
 
     };
@@ -35,7 +34,7 @@ public class Log {
 
         @Override
         protected SimpleDateFormat initialValue() {
-            return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+            return TimeUtil.newDateFormat("yyyy-MM-dd HH:mm:ss");
         }
 
     };
@@ -44,7 +43,7 @@ public class Log {
 
         @Override
         protected SimpleDateFormat initialValue() {
-            return new SimpleDateFormat("yyyy.MM.dd HH:mm:ss", Locale.getDefault());
+            return TimeUtil.newDateFormat("yyyy.MM.dd HH:mm:ss");
         }
 
     };
@@ -348,7 +347,7 @@ public class Log {
     public static String getLogFileName(String logName) {
         SimpleDateFormat sdf = DATE_FORMAT_THREAD_LOCAL.get();
         if (sdf == null) {
-            sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+            sdf = TimeUtil.newDateFormat("yyyy-MM-dd");
         }
         return logName + "." + sdf.format(new Date()) + ".log";
     }
@@ -356,7 +355,7 @@ public class Log {
     public static String getFormatDateTime() {
         SimpleDateFormat simpleDateFormat = DATE_TIME_FORMAT_THREAD_LOCAL.get();
         if (simpleDateFormat == null) {
-            simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+            simpleDateFormat = TimeUtil.newDateFormat("yyyy-MM-dd HH:mm:ss");
         }
         return simpleDateFormat.format(new Date());
     }
@@ -376,7 +375,7 @@ public class Log {
         try {
             SimpleDateFormat simpleDateFormat = OTHER_DATE_TIME_FORMAT_THREAD_LOCAL.get();
             if (simpleDateFormat == null) {
-                simpleDateFormat = new SimpleDateFormat("yyyy.MM.dd HH:mm:ss", Locale.getDefault());
+                simpleDateFormat = TimeUtil.newDateFormat("yyyy.MM.dd HH:mm:ss");
             }
             Date newD = simpleDateFormat.parse(timers);
             if (newD != null) {
@@ -394,7 +393,7 @@ public class Log {
 
             @Override
             protected SimpleDateFormat initialValue() {
-                return new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+                return TimeUtil.newDateFormat("yyyy-MM-dd");
             }
 
         };
@@ -417,7 +416,7 @@ public class Log {
         public String generateFileName(int logLevel, long timestamp) {
             SimpleDateFormat sdf = mLocalDateFormat.get();
             if (sdf == null) {
-                sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+                sdf = TimeUtil.newDateFormat("yyyy-MM-dd");
             }
             return name + "." + sdf.format(new Date(timestamp)) + ".log";
         }

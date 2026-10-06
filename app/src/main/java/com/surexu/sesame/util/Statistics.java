@@ -170,7 +170,7 @@ public class Statistics {
     }
     
     public static synchronized void save() {
-        save(Calendar.getInstance());
+        save(TimeUtil.getNow());
     }
     
     public static synchronized void save(Calendar nowCalendar) {
@@ -185,6 +185,7 @@ public class Statistics {
     }
     
     public static Boolean updateDay(Calendar nowCalendar) {
+        nowCalendar = TimeUtil.getCalendarByTimeMillis(nowCalendar.getTimeInMillis());
         int ye = nowCalendar.get(Calendar.YEAR);
         int mo = nowCalendar.get(Calendar.MONTH) + 1;
         int da = nowCalendar.get(Calendar.DAY_OF_MONTH);

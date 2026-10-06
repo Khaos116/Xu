@@ -19,6 +19,28 @@ import com.surexu.sesame.util.idMap.UserIdMap;
 public class AntFarmRpcCall {
     private static final String VERSION = "1.8.2302070202.46";
 
+    public static String queryRecentFarmFood(int queryNum) {
+        return ApplicationHook.requestString("com.alipay.antfarm.queryRecentFarmFood",
+                "[{\"queryNum\":" + queryNum + ",\"requestType\":\"NORMAL\",\"sceneCode\":\"ANTFARM\",\"source\":\"H5\"}]");
+    }
+
+    public static String getFitmentItemList(String activityId, String labelType, int startIndex) throws JSONException {
+        JSONObject args = new JSONObject().put("activityId", activityId).put("pageSize", 10)
+                .put("requestType", "NORMAL").put("sceneCode", "ANTFARM_FITMENT_MALL")
+                .put("source", "antfarm").put("startIndex", startIndex);
+        if (!labelType.isEmpty()) args.put("labelType", labelType);
+        return ApplicationHook.requestString("com.alipay.antiep.itemList", new JSONArray().put(args).toString());
+    }
+
+    public static String exchangeFamilyDecoration(String spuId, String skuId, String activityId) throws JSONException {
+        JSONObject args = new JSONObject().put("context", new JSONObject().put("activityId", activityId))
+                .put("requestId", generateRequestId()).put("requestType", "NORMAL")
+                .put("sceneCode", "ANTFARM_FITMENT_MALL").put("source", "H5")
+                .put("spuId", spuId).put("skuId", skuId);
+        return ApplicationHook.requestString("com.alipay.antcommonweal.exchange.h5.exchangeBenefit",
+                new JSONArray().put(args).toString());
+    }
+
     public static String enterFarm(String userId) {
         String args = "[{\"queryLastRecordNum\":true,\"recall\":false,\"requestType\":\"NORMAL\"," + "\"sceneCode" + "\":\"ANTFARM\",\"source\":\"H5\",\"userId\":\"" + userId + "\"}]";
         return ApplicationHook.requestString("com.alipay.antfarm.enterFarm", args);

@@ -7,13 +7,25 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.Locale;
+import java.util.TimeZone;
 
 /**
  * @author Constanline
  * @since 2023/07/17
  */
 public class TimeUtil {
+
+    // 只固定插件的业务时区，不修改支付宝宿主进程的默认时区。
+    public static TimeZone getTimeZone() {
+        return TimeZone.getTimeZone("GMT+08:00");
+    }
+
+    public static SimpleDateFormat newDateFormat(String pattern) {
+        SimpleDateFormat format = new SimpleDateFormat(pattern, Locale.CHINA);
+        format.setTimeZone(getTimeZone());
+        return format;
+    }
 
     public static Boolean checkNowInTimeRange(String timeRange) {
         return checkInTimeRange(System.currentTimeMillis(), timeRange);
@@ -92,9 +104,8 @@ public class TimeUtil {
 
     public static Integer isCompareTimeStr(Long timeMillis, String compareTimeStr) {
         try {
-            Calendar timeCalendar = Calendar.getInstance();
-            timeCalendar.setTimeInMillis(timeMillis);
-            Calendar compareCalendar = getTodayCalendarByTimeStr(compareTimeStr);
+            Calendar timeCalendar = getCalendarByTimeMillis(timeMillis);
+            Calendar compareCalendar = getCalendarByTimeStr(timeMillis, compareTimeStr);
             if (compareCalendar != null) {
                 return timeCalendar.compareTo(compareCalendar);
             }
@@ -120,6 +131,9 @@ public class TimeUtil {
 
     public static Calendar getCalendarByTimeStr(Calendar timeCalendar, String timeStr) {
         try {
+            long timeMillis = timeCalendar.getTimeInMillis();
+            timeCalendar.setTimeZone(getTimeZone());
+            timeCalendar.setTimeInMillis(timeMillis);
             int length = timeStr.length();
             switch (length) {
                 case 6:
@@ -149,7 +163,7 @@ public class TimeUtil {
     }
 
     public static Calendar getCalendarByTimeMillis(Long timeMillis) {
-        Calendar timeCalendar = Calendar.getInstance();
+        Calendar timeCalendar = getNow();
         if (timeMillis != null) {
             timeCalendar.setTimeInMillis(timeMillis);
         }
@@ -157,7 +171,9 @@ public class TimeUtil {
     }
 
     public static String getTimeStr(long ts) {
-        return DateFormat.getTimeInstance().format(new java.util.Date(ts));
+        DateFormat format = DateFormat.getTimeInstance();
+        format.setTimeZone(getTimeZone());
+        return format.format(new Date(ts));
     }
 
     public static String getDateStr() {
@@ -165,15 +181,17 @@ public class TimeUtil {
     }
 
     public static String getDateStr(int plusDay) {
-        Calendar c = Calendar.getInstance();
+        Calendar c = getNow();
         if (plusDay != 0) {
             c.add(Calendar.DATE, plusDay);
         }
-        return DateFormat.getDateInstance().format(c.getTime());
+        DateFormat format = DateFormat.getDateInstance();
+        format.setTimeZone(getTimeZone());
+        return format.format(c.getTime());
     }
 
     public static Calendar getToday() {
-        Calendar c = Calendar.getInstance();
+        Calendar c = getNow();
         c.set(Calendar.HOUR_OF_DAY, 0);
         c.set(Calendar.MINUTE, 0);
         c.set(Calendar.SECOND, 0);
@@ -182,7 +200,7 @@ public class TimeUtil {
     }
 
     public static Calendar getNow() {
-        return Calendar.getInstance();
+        return Calendar.getInstance(getTimeZone(), Locale.CHINA);
     }
 
     public static void sleep(long millis) {
@@ -204,7 +222,7 @@ public class TimeUtil {
      * @return 当前年的第几周
      */
     public static int getWeekNumber(Date dateTime) {
-        Calendar calendar = Calendar.getInstance();
+        Calendar calendar = getNow();
         calendar.setTime(dateTime);
         // 设置周的第一天为周一
         calendar.setFirstDayOfWeek(Calendar.MONDAY);
@@ -218,6 +236,8 @@ public class TimeUtil {
      * @return Boolean 如果小于，则为true，否则为false
      */
     public static Boolean isLessThanSecondOfDays(Calendar firstCalendar, Calendar secondCalendar) {
+        firstCalendar = getCalendarByTimeMillis(firstCalendar.getTimeInMillis());
+        secondCalendar = getCalendarByTimeMillis(secondCalendar.getTimeInMillis());
         return (firstCalendar.get(Calendar.YEAR) < secondCalendar.get(Calendar.YEAR))
                 || (firstCalendar.get(Calendar.YEAR) == secondCalendar.get(Calendar.YEAR)
                 && firstCalendar.get(Calendar.DAY_OF_YEAR) < secondCalendar.get(Calendar.DAY_OF_YEAR));
@@ -251,6 +271,8 @@ public class TimeUtil {
      * @return 两个日历对象是否为同一天
      */
     public static Boolean isSameDay(Calendar firstCalendar, Calendar secondCalendar) {
+        firstCalendar = getCalendarByTimeMillis(firstCalendar.getTimeInMillis());
+        secondCalendar = getCalendarByTimeMillis(secondCalendar.getTimeInMillis());
         return firstCalendar.get(Calendar.YEAR) == secondCalendar.get(Calendar.YEAR)
                 && firstCalendar.get(Calendar.DAY_OF_YEAR) == secondCalendar.get(Calendar.DAY_OF_YEAR);
     }
@@ -287,11 +309,11 @@ public class TimeUtil {
 
     @SuppressLint("SimpleDateFormat")
     public static DateFormat getCommonDateFormat() {
-        return new SimpleDateFormat("dd日HH:mm:ss");
+        return newDateFormat("dd日HH:mm:ss");
     }
     @SuppressLint("SimpleDateFormat")
     public static DateFormat getCommonDateFormatS() {
-        return new SimpleDateFormat("dd日HHmmss");
+        return newDateFormat("dd日HHmmss");
     }
 
     @SuppressLint("SimpleDateFormat")

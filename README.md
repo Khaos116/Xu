@@ -110,6 +110,18 @@ keyPassword=你的口令
 
 正式发版走 `.github/workflows/release.yml`：打 tag → 云端构建单包（normal）→ 上传 Release 资产。
 
+## my_dev 本地增强
+
+从旧项目 `Sure-Xu/my_main` 的 `01f2fc6` 移植鱼塘、家庭装饰兑换、庄园任务筛选、Gemini 2.5 Flash 与可选联网搜索、GMT+8 业务时间、WebP 图片和 R8 反射保留规则。保留当前项目的农场修复、自定义 AI、桌宠、配置编辑器和 Normal 双入口单包。
+
+鱼塘及家庭装饰兑换默认关闭；AI 默认仍为自定义接口，可在“其他 → AI答”切换 Gemini 并填写令牌。Normal Release 自动按北京时间归档到 `APK/Release/`。
+
+- [本次移植记录与验证](doc/Sure-Xu-Migration.md)
+- [GR 功能同步记录](doc/GR-Sync.md)
+- [旧项目核查与待修改清单](doc/MyFix.md)
+
+编译 `:app:assembleNormalRelease` 后，运行 `python scripts/check_gemini.py`、`python scripts/check_gmt8.py`、`python scripts/check_gr_sync.py` 和 `python scripts/check_legacy_apk.py`（保留旧脚本名，现检查 Normal 归档）。模拟器上的实际混淆 DEX 检查：`python scripts/check_r8_apk.py --serial <模拟器编号>`。发布产物请保留 `app/build/outputs/mapping/normalRelease/mapping.txt`，用于还原混淆堆栈。
+
 ## 常见问题
 
 - **开关改了不生效**：配置页改动会广播重载；若仍无效，强制停止支付宝后重进一次。

@@ -429,7 +429,7 @@ public class PlantingFlowersRpcCall {
 
     /** yyyy-MM-dd */
     private static String getTodayStr() {
-        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.ROOT);
+        java.text.SimpleDateFormat sdf = TimeUtil.newDateFormat("yyyy-MM-dd");
         return sdf.format(new java.util.Date());
     }
 

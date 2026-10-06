@@ -17,7 +17,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.TimeZone;
 
 @SuppressLint("SimpleDateFormat")
 public class JsonUtil {
@@ -35,8 +34,8 @@ public class JsonUtil {
         MAPPER.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
         //属性为null不转换
         MAPPER.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-        MAPPER.setTimeZone(TimeZone.getDefault());
-        MAPPER.setDateFormat(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
+        MAPPER.setTimeZone(TimeUtil.getTimeZone());
+        MAPPER.setDateFormat(TimeUtil.newDateFormat("yyyy-MM-dd HH:mm:ss"));
     }
 
     public static ObjectMapper copyMapper() {

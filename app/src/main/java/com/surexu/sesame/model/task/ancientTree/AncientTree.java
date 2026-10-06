@@ -15,11 +15,8 @@ import com.surexu.sesame.util.MessageUtil;
 import com.surexu.sesame.util.Status;
 import com.surexu.sesame.util.TimeUtil;
 
-import java.text.SimpleDateFormat;
 import java.util.Collection;
-import java.util.Date;
 import java.util.LinkedHashSet;
-import java.util.Locale;
 
 public class AncientTree extends ModelTask {
     private static final String TAG = AncientTree.class.getSimpleName();
@@ -52,9 +49,10 @@ public class AncientTree extends ModelTask {
         if (!TaskCommon.IS_ENERGY_TIME && TaskCommon.IS_AFTER_8AM) {
             if (!ancientTreeOnlyWeek.getValue()) {
                 return true;
-            } SimpleDateFormat sdf_week = new SimpleDateFormat("EEEE", Locale.getDefault());
-            String week = sdf_week.format(new Date());
-            return "星期一".equals(week) || "星期三".equals(week) || "星期五".equals(week);
+            }
+            int week = TimeUtil.getNow().get(java.util.Calendar.DAY_OF_WEEK);
+            return week == java.util.Calendar.MONDAY || week == java.util.Calendar.WEDNESDAY
+                    || week == java.util.Calendar.FRIDAY;
         } return false;
     }
 

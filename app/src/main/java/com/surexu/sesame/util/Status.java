@@ -54,6 +54,8 @@ public class Status {
     private final Set<String> memberPointExchangeBenefitLogList = new HashSet<>();
     
     // other
+    private long fishLastExecTime = 0L;
+
     private final Set<String> flagLogList = new HashSet<>();
 
     // 爱心鸡结号(S2)：上一个已捐蛋的轮次号；持久化以避免进程重启后同一轮重复捐
@@ -777,7 +779,7 @@ public class Status {
     }
     
     public static synchronized void save() {
-        save(Calendar.getInstance());
+        save(TimeUtil.getNow());
     }
     
     public static synchronized void save(Calendar nowCalendar) {

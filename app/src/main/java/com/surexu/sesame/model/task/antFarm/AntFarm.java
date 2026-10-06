@@ -1264,7 +1264,7 @@ public class AntFarm extends ModelTask {
      * 周日 20:00 起轮次结束（结算/发奖期），不捐蛋、不偷榜。
      */
     private boolean isCompetitionRoundActive() {
-        java.util.Calendar cal = java.util.Calendar.getInstance();
+        java.util.Calendar cal = TimeUtil.getNow();
         int dow = cal.get(java.util.Calendar.DAY_OF_WEEK); // SUNDAY=1
         int hour = cal.get(java.util.Calendar.HOUR_OF_DAY);
         // 周日 20:00 之后到周一 00:00 之前为轮次外
@@ -1314,7 +1314,7 @@ public class AntFarm extends ModelTask {
         if (minutes <= 0) {
             return;
         }
-        java.util.Calendar target = java.util.Calendar.getInstance();
+        java.util.Calendar target = TimeUtil.getNow();
         target.set(java.util.Calendar.HOUR_OF_DAY, 20);
         target.set(java.util.Calendar.MINUTE, 0);
         target.set(java.util.Calendar.SECOND, 0);
@@ -1698,6 +1698,7 @@ public class AntFarm extends ModelTask {
             } else if ("ANSWER".equals(taskId)) {
                 isDoTask = doAnswerTask(title);
             } else {
+                if (!FarmTaskPolicy.canRun(task)) return false;
                 JSONObject jodoFarmTask = new JSONObject(AntFarmRpcCall.doFarmTask(bizKey));
                 //检查并标记黑名单任务（此处是庄园饲料任务，应写入饲料黑名单而非抽抽乐）
                 MessageUtil.checkResultCodeAndMarkTaskBlackList("AntFarmDoFarmTaskList", title, jodoFarmTask);
@@ -3557,6 +3558,9 @@ public class AntFarm extends ModelTask {
             if (familyOptions.getValue().contains("shareToFriends")) {
                 familyShareToFriends(ownerGroupId, familyUserIds, notInviteList);
             }
+            if (familyOptions.getValue().contains("ExchangeFamilyDecoration")) {
+                FamilyDecoration.run(joenterFamily);
+            }
         } catch (Throwable t) {
             Log.err(TAG, "family err:", t);
         }
@@ -3650,14 +3654,14 @@ public class AntFarm extends ModelTask {
     private void deliverMsgSend(JSONArray familyAnimalsExceptUser, List<String> familyUserIds) {
         try {
             // 时间窗口控制：仅允许在「早安时间段」内自动发送（06:00 ~ 10:00）
-            Calendar now = Calendar.getInstance();
-            Calendar startTime = Calendar.getInstance();
+            Calendar now = TimeUtil.getNow();
+            Calendar startTime = TimeUtil.getNow();
             startTime.set(Calendar.HOUR_OF_DAY, 6);
             startTime.set(Calendar.MINUTE, 0);
             startTime.set(Calendar.SECOND, 0);
             startTime.set(Calendar.MILLISECOND, 0);
 
-            Calendar endTime = Calendar.getInstance();
+            Calendar endTime = TimeUtil.getNow();
             endTime.set(Calendar.HOUR_OF_DAY, 10);
             endTime.set(Calendar.MINUTE, 0);
             endTime.set(Calendar.SECOND, 0);
@@ -3985,11 +3989,11 @@ public class AntFarm extends ModelTask {
 
     private JSONArray queryRecentFarmFood(int needCount) {
         try {
-            JSONObject jo = new JSONObject(AntFarmRpcCall.syncAnimalStatus(ownerFarmId));
+            JSONObject jo = new JSONObject(AntFarmRpcCall.queryRecentFarmFood(needCount));
             if (!MessageUtil.checkMemo(TAG, jo)) {
                 return null;
             }
-            JSONArray cuisineList = jo.getJSONArray("cuisineList");
+            JSONArray cuisineList = jo.getJSONArray("cuisines");
             if (cuisineList.length() == 0) {
                 return null;
             }

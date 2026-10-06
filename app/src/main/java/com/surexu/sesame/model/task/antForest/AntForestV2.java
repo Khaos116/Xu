@@ -3789,8 +3789,7 @@ public class AntForestV2 extends ModelTask {
             return 0L;
         }
         try {
-            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA);
-            format.setTimeZone(TimeZone.getTimeZone("Asia/Shanghai"));
+            SimpleDateFormat format = TimeUtil.newDateFormat("yyyy-MM-dd HH:mm:ss");
             format.setLenient(false);
             Date parsed = format.parse(date);
             return parsed == null ? 0L : parsed.getTime();

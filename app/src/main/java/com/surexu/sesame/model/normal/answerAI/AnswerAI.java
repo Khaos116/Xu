@@ -10,6 +10,8 @@ import com.surexu.sesame.data.ModelGroup;
 import com.surexu.sesame.data.TokenConfig;
 import com.surexu.sesame.data.ViewAppInfo;
 import com.surexu.sesame.data.modelFieldExt.EmptyModelField;
+import com.surexu.sesame.data.modelFieldExt.ChoiceModelField;
+import com.surexu.sesame.data.modelFieldExt.BooleanModelField;
 import com.surexu.sesame.data.modelFieldExt.IntegerModelField;
 import com.surexu.sesame.data.modelFieldExt.StringModelField;
 import com.surexu.sesame.util.Log;
@@ -46,7 +48,11 @@ public class AnswerAI extends Model {
     }
 
     /** 当前生效的自定义AI实现；未配置时为 null，表示不调用AI */
-    private static volatile CustomAI customAI;
+    private static volatile AnswerAIInterface customAI;
+
+    private final ChoiceModelField aiType = new ChoiceModelField("useGeminiAI", "AI类型", 0, new String[]{"自定义AI", "GEMINI"});
+    private final StringModelField setGeminiAIToken = new StringModelField("useGeminiAIToken", "GeminiAI | 设置令牌", "");
+    private final BooleanModelField geminiGoogleSearch = new BooleanModelField("geminiGoogleSearch", "GeminiAI | 联网搜索", false);
 
     private final StringModelField customAIUrl = new StringModelField("customAIUrl", "自定义AI | 接口地址(根地址,如/v1)", "");
     private final StringModelField customAIModel = new StringModelField("customAIModel", "自定义AI | 模型名", "");
@@ -57,6 +63,9 @@ public class AnswerAI extends Model {
     @Override
     public ModelFields getFields() {
         ModelFields modelFields = new ModelFields();
+        modelFields.addField(aiType);
+        modelFields.addField(setGeminiAIToken);
+        modelFields.addField(geminiGoogleSearch);
         modelFields.addField(customAIUrl);
         modelFields.addField(customAIModel);
         modelFields.addField(customAIKey);
@@ -68,8 +77,14 @@ public class AnswerAI extends Model {
     @Override
     public void boot(ClassLoader classLoader) {
         enable = getEnableField().getValue();
-        customAI = new CustomAI(customAIUrl.getValue(), customAIModel.getValue(), customAIKey.getValue(), customAIMaxTokens.getValue());
-        if (!customAI.isConfigured()) {
+        if (Integer.valueOf(1).equals(aiType.getValue())) {
+            customAI = StringUtil.isEmpty(setGeminiAIToken.getValue()) ? null
+                    : new GeminiAI(setGeminiAIToken.getValue(), Boolean.TRUE.equals(geminiGoogleSearch.getValue()));
+            return;
+        }
+        CustomAI configuredAI = new CustomAI(customAIUrl.getValue(), customAIModel.getValue(), customAIKey.getValue(), customAIMaxTokens.getValue());
+        customAI = configuredAI;
+        if (!configuredAI.isConfigured()) {
             customAI = null;
             Log.record("AI🧠接口地址/模型名/令牌未填齐，答题不会调用AI，将直接使用题库或首个选项");
         }
@@ -82,10 +97,20 @@ public class AnswerAI extends Model {
      * 网络请求放到子线程，避免在主线程阻塞或抛 NetworkOnMainThreadException。
      */
     private void testConnection() {
-        CustomAI tempAI = new CustomAI(customAIUrl.getValue(), customAIModel.getValue(), customAIKey.getValue(), customAIMaxTokens.getValue());
-        if (!tempAI.isConfigured()) {
-            showToast("请先填写接口地址、模型名与令牌");
-            return;
+        final AnswerAIInterface tempAI;
+        if (Integer.valueOf(1).equals(aiType.getValue())) {
+            if (StringUtil.isEmpty(setGeminiAIToken.getValue())) {
+                showToast("请先填写 Gemini 令牌");
+                return;
+            }
+            tempAI = new GeminiAI(setGeminiAIToken.getValue(), Boolean.TRUE.equals(geminiGoogleSearch.getValue()));
+        } else {
+            CustomAI configuredAI = new CustomAI(customAIUrl.getValue(), customAIModel.getValue(), customAIKey.getValue(), customAIMaxTokens.getValue());
+            if (!configuredAI.isConfigured()) {
+                showToast("请先填写接口地址、模型名与令牌");
+                return;
+            }
+            tempAI = configuredAI;
         }
         showToast("正在测试AI接口...");
         new Thread(() -> {

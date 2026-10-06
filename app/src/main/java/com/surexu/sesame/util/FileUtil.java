@@ -11,7 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Locale;
 
 public class FileUtil {
     private static final String TAG = FileUtil.class.getSimpleName();
@@ -112,7 +111,7 @@ public class FileUtil {
         // 复用 Log 类的线程安全日期格式化器
         SimpleDateFormat dateFormat = Log.DATE_FORMAT_THREAD_LOCAL.get();
         if (dateFormat == null) {
-            dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+            dateFormat = TimeUtil.newDateFormat("yyyy-MM-dd");
         }
         // 格式化文件修改日期和当前日期
         String fileDate = dateFormat.format(new Date(fileLastModified));
@@ -550,6 +549,10 @@ public class FileUtil {
     public static File getAntOceanFishBlackListMapFile() {
         return getFile(MAIN_DIRECTORY_FILE, "AntOceanFishBlack.json");
     }
+
+    public static File getAntFishpondTaskListMapFile() {
+        return new File(MAIN_DIRECTORY_FILE, "AntFishpondTask.json");
+    }
     
     public static File getAntOrchardTaskListMapFile() {
         return getFile(MAIN_DIRECTORY_FILE, "AntOrchardTask.json");
@@ -664,7 +667,7 @@ public class FileUtil {
         }
         SimpleDateFormat sdf = Log.DATE_FORMAT_THREAD_LOCAL.get();
         if (sdf == null) {
-            sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+            sdf = TimeUtil.newDateFormat("yyyy-MM-dd");
         }
         String today = sdf.format(new Date());
         for (File file : files) {

@@ -315,7 +315,7 @@ public class PlantingFlowers extends ModelTask {
     }
 
     private long todayLong() {
-        return Long.parseLong(new SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(new Date()));
+        return Long.parseLong(TimeUtil.newDateFormat("yyyyMMdd").format(new Date()));
     }
 
     // ═══════════════════ 收花豆 ═══════════════════
@@ -524,7 +524,7 @@ public class PlantingFlowers extends ModelTask {
         }
         try {
             String normalized = endTime.replace("-", "/");
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.ROOT);
+            SimpleDateFormat sdf = TimeUtil.newDateFormat("yyyy/MM/dd HH:mm:ss");
             return sdf.parse(normalized).getTime();
         } catch (Throwable t) {
             Log.err(TAG, "endTime 解析失败: " + endTime, t);

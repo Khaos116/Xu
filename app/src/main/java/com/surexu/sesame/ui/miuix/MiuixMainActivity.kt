@@ -73,8 +73,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.surexu.sesame.BuildConfig
 import com.surexu.sesame.R
 import com.surexu.sesame.data.AppConfig
 import com.surexu.sesame.data.ConfigPreload
@@ -102,7 +104,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.io.File
-import java.util.Calendar
+import com.surexu.sesame.util.TimeUtil
 
 class MiuixMainActivity : MiuixBaseActivity() {
 
@@ -286,7 +288,7 @@ class MiuixMainActivity : MiuixBaseActivity() {
         if (!hasPermission) return
         try {
             Statistics.load()
-            Statistics.updateDay(Calendar.getInstance())
+            Statistics.updateDay(TimeUtil.getNow())
             statisticsVersion++
             statisticsText = Statistics.getText(this)
         } catch (e: Exception) {
@@ -432,15 +434,37 @@ fun MainScreen(activity: MiuixMainActivity) {
         Column(
             Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(padding)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            when (selectedTab) {
-                0 -> HomeTab(activity)
-                1 -> LogsTab(activity)
-                2 -> ConfigTab(activity)
-                3 -> SettingsTab(activity)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Sure-Xu",
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = "v${BuildConfig.VERSION_NAME}\n编译 ${BuildConfig.BUILD_TIME}",
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    textAlign = TextAlign.End,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                when (selectedTab) {
+                    0 -> HomeTab(activity)
+                    1 -> LogsTab(activity)
+                    2 -> ConfigTab(activity)
+                    3 -> SettingsTab(activity)
+                }
             }
         }
     }
@@ -515,15 +539,6 @@ fun HomeTab(activity: MiuixMainActivity) {
     val activated = activity.uiRunType == RunType.MODEL
     val appTitle = ViewAppInfo.getAppTitle()
     val version = ViewAppInfo.getAppVersion()
-
-    Text(
-        text = "Sure-Xu",
-        fontSize = 34.sp,
-        fontWeight = FontWeight.Bold,
-        color = MiuixTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-    )
-    Spacer(Modifier.height(14.dp))
 
     // 能量统计卡：顶部状态条（激活状态 + 标题），下方 4×4 数据网格
     // 透传统计版本号：统计刷新后本卡随之重组并重读最新快照

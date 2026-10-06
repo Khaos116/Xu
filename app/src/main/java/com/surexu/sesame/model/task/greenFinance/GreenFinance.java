@@ -12,10 +12,8 @@ import com.surexu.sesame.util.Log;
 import com.surexu.sesame.util.Status;
 import com.surexu.sesame.util.TimeUtil;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.Locale;
 import java.util.TreeMap;
 
 /**
@@ -331,9 +329,8 @@ public class GreenFinance extends ModelTask {
                 for (int i = 0; i < prizes.length(); i++) {
                     jsonObject = prizes.getJSONObject(i);
                     String bizTime = jsonObject.getString("bizTime");
-                    // 使用 SimpleDateFormat 解析字符串
-                    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH);
-                    Date dateTime = formatter.parse(bizTime);
+                    // 服务端的 Z/偏移量表示绝对时刻，解析后再按业务时区比较周数。
+                    Date dateTime = Date.from(java.time.Instant.parse(bizTime));
                     if (TimeUtil.getWeekNumber(dateTime) == TimeUtil.getWeekNumber(new Date())) {
                         //本周已完成
                         Status.greenFinancePrizesMap();

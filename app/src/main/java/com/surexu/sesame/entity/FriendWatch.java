@@ -131,10 +131,10 @@ public class FriendWatch extends IdAndName {
         if (last == 0L) {
             return true;
         }
-        Calendar cLast = Calendar.getInstance();
+        Calendar cLast = TimeUtil.getNow();
         cLast.setTimeInMillis(last);
-        Calendar cNow = Calendar.getInstance();
-        if (cLast.get(Calendar.DAY_OF_YEAR) == cNow.get(Calendar.DAY_OF_YEAR)) {
+        Calendar cNow = TimeUtil.getNow();
+        if (TimeUtil.isSameDay(cLast, cNow)) {
             return false;
         }
         return cNow.get(Calendar.DAY_OF_WEEK) == Calendar.MONDAY;

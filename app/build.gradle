@@ -87,9 +87,6 @@ android {
     // ABI 拆分已关闭：每个 flavor 只出一个全架构包，与旧版发布惯例一致（3 个 flavor = 3 个 APK）
     // 体积主要靠 R8 + 资源裁剪，ABI 拆分收益有限（约 0.4 MB），不再产出 arm64-v8a / armeabi-v7a 单独包
     sourceSets {
-        main {
-            jniLibs.srcDirs = ['src/main/jniLibs']
-        }
         // normal（双入口通吃）：modern(libxposed 102) + legacy(传统 ≤93) 源集合并，
         // 同时携带传统 assets/xposed_init 与 libxposed META-INF/xposed 元数据；
         // SesameApplication 仅由 src/normal/java 提供（modern/legacy 的副本已移除）
@@ -119,6 +116,21 @@ androidComponents {
             // 单包通吃：仅 Sure-Xu-Normal-<version>.apk
             output.outputFileName.set("Sure-Xu-${appType}-${project.appVersion}.apk")
         }
+    }
+}
+
+// Normal Release 打包成功后，按北京时间归档到项目根目录 APK/Release。
+tasks.matching { it.name == 'assembleNormalRelease' }.configureEach {
+    def apkName = "Sure-Xu-Normal-${project.appVersion}"
+    def sourceApk = layout.buildDirectory.file("outputs/apk/normal/release/${apkName}.apk")
+    def archiveDir = rootProject.layout.projectDirectory.dir('APK/Release').asFile.toPath()
+    doLast {
+        def timestamp = new Date().format('yyyyMMdd_HHmmss', TimeZone.getTimeZone('Asia/Shanghai'))
+        def archivedApk = archiveDir.resolve("${apkName}_${timestamp}.apk")
+        java.nio.file.Files.createDirectories(archiveDir)
+        java.nio.file.Files.copy(sourceApk.get().asFile.toPath(), archivedApk,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        logger.lifecycle("Normal APK 已归档: ${archivedApk}")
     }
 }
 
