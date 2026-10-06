@@ -99,7 +99,7 @@ gradle assembleNormalRelease -Pversion=3.1.7
 # 产物：app/build/outputs/apk/normal/release/Sure-Xu-Normal-3.1.7.apk（已签名）
 ```
 
-签名读取 `app/keystore.properties`（不入库，首次克隆后需自备）：
+仓库包含旧项目的公开签名 `app/xqe.jks` 和 `app/keystore.properties`，克隆后可直接构建签名 APK。如需使用自己的签名，可按以下格式修改配置：
 
 ```properties
 storeFile=your-release.jks

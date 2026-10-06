@@ -65,8 +65,8 @@ fastlane/readme.md
 
 Xposed-Modules-Repo/
 plugin/
-# 签名密钥与口令（不要提交到公开仓库）
+# 其他本地签名密钥；xqe.jks 是随仓库提供的公开签名
 *.jks
 *.p12
 *.keystore
-app/keystore.properties
+!app/xqe.jks

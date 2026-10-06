@@ -47,7 +47,7 @@ android {
         applicationType = "Normal"
     }
 
-    // 签名配置：密钥与口令放在 app/keystore.properties（该文件不入版本库）
+    // 公开签名配置与 xqe.jks 随仓库提供。
     def keystorePropsFile = rootProject.file("app/keystore.properties")
     def keystoreProps = new Properties()
     if (keystorePropsFile.exists()) {

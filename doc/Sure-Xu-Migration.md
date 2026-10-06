@@ -30,7 +30,7 @@
 - 旧项目的果园模块、Java 水印类和 JNI 加载/Toast 拦截链已被当前上游移除，不恢复失去依赖和调用入口的旧类。
 - 当前统计仅有日/月/年，保留该结构；旧脚本中的 TOTAL 断言相应移除。保留午夜和跨年重置检查。
 - 旧文档中三渠道、旧 APK、待修项和验证结果属于 2026-09-12，不能当作当前分支的验证结果。
-- 旧 `app/keystore.properties` 与 `app/xqe.jks` 仅复制到当前项目本地，保持 Git 忽略，不进入提交。本地已有签名文件时不会覆盖。
+- 旧 `app/keystore.properties` 与 `app/xqe.jks` 已同步；用户确认它们是公开签名，按要求加入 Git。其他本地签名密钥仍保持忽略。
 - 移植前已有的 `.serena/` 和 `gradle/gradle-daemon-jvm.properties` 不纳入提交。
 
 ## 验证
@@ -44,7 +44,7 @@
 | `scripts/check_legacy_apk.py` | Normal 归档与构建产物 SHA-256 一致 |
 | `scripts/check_r8_apk.py --serial emulator-5556` | 实际混淆 DEX 通过：模型构造、全模型配置往返、自定义/Gemini 路由、Jackson 泛型、状态与 RPC 数据 |
 | `apksigner verify --verbose` | APK 校验通过，v2 签名有效 |
-| 完整性 | 原功能源码与 WebP 内容一致；两份原文保留；旧项目工作区无改动，签名文件内容相同且未跟踪 |
+| 完整性 | 原功能源码与 WebP 内容一致；两份原文保留；旧项目工作区无改动，公开签名文件内容相同并加入版本控制；验证 APK 的签名证书与旧 xqe.jks 一致 |
 
 验证产物：`APK/Release/Sure-Xu-Normal-1.3.0_20261006_125804.apk`，2.70 MiB。版本名沿用项目未传 `-Pversion` 时的默认值；这是本地验证产物，并非 v1.3.0 上游源码或新的正式发布。
 
