@@ -52,6 +52,7 @@ import com.surexu.sesame.util.FileUtil
 import com.surexu.sesame.util.LanguageUtil
 import com.surexu.sesame.util.Statistics
 import com.surexu.sesame.util.StringUtil
+import com.surexu.sesame.util.idMap.UserIdMap
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -97,8 +98,8 @@ class NeoMainActivity : AppCompatActivity() {
         const val LOG_MAX_TAIL_BYTES = 1024 * 1024L
         /** 日志查看时最多展示的条目数 */
         const val LOG_MAX_ENTRIES = 500
-        /** 单次渲染最多生成的日志卡片数（超出只显示最新部分，避免一次性 inflate 过多导致卡顿） */
-        const val LOG_MAX_RENDER = 300
+        /** 单次渲染最多生成的日志卡片数（超出只显示最新部分，配合 View 复用避免卡顿） */
+        const val LOG_MAX_RENDER = 200
     }
 
     override fun attachBaseContext(newBase: Context) {
@@ -231,6 +232,7 @@ class NeoMainActivity : AppCompatActivity() {
         }
         // 系统界面设置可能已变更：即时应用悬浮底栏并刷新设置页副标题
         applyFloatNav()
+        updateAccountSettingCard()
         updateSystemSettingSub()
         // 能量统计实时刷新：回到前台立即拉一次，并启动定时拉新（注入进程落盘 statistics.json 后自动同步）
         bindEnergyStats()
@@ -445,6 +447,8 @@ class NeoMainActivity : AppCompatActivity() {
                         val uid = intent.getStringExtra("uid")
                         if (!uid.isNullOrEmpty() && uid != restoreSelectedAccount()) {
                             uiPrefs.edit().putString(KEY_LAST_SELECTED_USER, uid).apply()
+                            // 登录账号已更新：刷新设置页账号卡片（头像/账号名），无需进账号页即可看到
+                            runOnUiThread { updateAccountSettingCard() }
                         }
                     }
                     runTypeProbeTimes = 0
@@ -764,40 +768,77 @@ class NeoMainActivity : AppCompatActivity() {
     }
 
     /** 按当前分类 + 搜索词渲染日志列表；空结果显示空态卡。
-     *  @param scrollToBottom 渲染完成后是否滚动到最新日志（切分类/首次进入/手动刷新为 true，自动刷新保持当前位置） */
+     *  @param scrollToBottom 渲染完成后是否滚动到最新日志（切分类/首次进入/手动刷新为 true，自动刷新保持当前位置）
+     *  @implNote 采用 View 复用：数据变化时只更新已有条目文本、按需新增/移除，
+     *            不再每次 removeAllViews + 全量 inflate，避免日志量大时主线程被反复重建数百个 View 卡死。 */
     private fun renderLogEntries(scrollToBottom: Boolean = false) {
         val list = findViewById<LinearLayout>(R.id.neo_logs_list)
         val empty = findViewById<View>(R.id.neo_logs_empty)
         val query = findViewById<EditText>(R.id.neo_logs_search_input).text.toString().trim()
+        // 过滤在数据量最大 500 条内进行，纯内存操作很快；真正的卡顿源是 inflate/布局，已用复用解决
         val filtered = logEntries.filter { e ->
             query.isEmpty() ||
                 (e.tag?.contains(query, ignoreCase = true) == true) ||
                 e.body.contains(query, ignoreCase = true)
         }
-        list.removeAllViews()
         if (filtered.isEmpty()) {
+            list.removeAllViews()
             empty.visibility = View.VISIBLE
             list.visibility = View.GONE
             return
         }
         empty.visibility = View.GONE
         list.visibility = View.VISIBLE
-        // 数据多时只渲染最新 LOG_MAX_RENDER 条，避免一次性 inflate 过多 View 卡顿
+
+        // 数据多时只渲染最新 LOG_MAX_RENDER 条
         val toRender = if (filtered.size > LOG_MAX_RENDER) filtered.takeLast(LOG_MAX_RENDER) else filtered
-        toRender.forEach { entry ->
-            val card = layoutInflater.inflate(R.layout.neo_item_log_entry, list, false)
+        val childCount = list.childCount
+        val count = toRender.size
+
+        // 1) 更新/复用已有条目：只改文本，不重建 View
+        repeat(minOf(childCount, count)) { i ->
+            val entry = toRender[i]
+            val card = list.getChildAt(i)
             card.findViewById<TextView>(R.id.entry_tag).text = entry.tag ?: "日志"
             card.findViewById<TextView>(R.id.entry_time).text = entry.time ?: ""
             val body = card.findViewById<TextView>(R.id.entry_body)
             if (entry.body.isBlank()) {
                 body.visibility = View.GONE
+                body.text = ""
             } else {
+                body.visibility = View.VISIBLE
                 body.text = entry.body
             }
             card.setOnClickListener { copyLogEntry(entry) }
             card.findViewById<View>(R.id.entry_copy).setOnClickListener { copyLogEntry(entry) }
-            list.addView(card)
         }
+
+        // 2) 现有 View 多于需要：移除多余的（从尾往头移除，避免索引错乱）
+        if (childCount > count) {
+            for (i in childCount - 1 downTo count) {
+                list.removeViewAt(i)
+            }
+        }
+
+        // 3) 需要更多条目：按需增量 inflate 新增
+        if (count > childCount) {
+            for (i in childCount until count) {
+                val entry = toRender[i]
+                val card = layoutInflater.inflate(R.layout.neo_item_log_entry, list, false)
+                card.findViewById<TextView>(R.id.entry_tag).text = entry.tag ?: "日志"
+                card.findViewById<TextView>(R.id.entry_time).text = entry.time ?: ""
+                val body = card.findViewById<TextView>(R.id.entry_body)
+                if (entry.body.isBlank()) {
+                    body.visibility = View.GONE
+                } else {
+                    body.text = entry.body
+                }
+                card.setOnClickListener { copyLogEntry(entry) }
+                card.findViewById<View>(R.id.entry_copy).setOnClickListener { copyLogEntry(entry) }
+                list.addView(card)
+            }
+        }
+
         if (scrollToBottom) {
             val scroll = findViewById<ScrollView>(R.id.neo_logs_scroll)
             scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
@@ -992,7 +1033,61 @@ class NeoMainActivity : AppCompatActivity() {
             }
             list.addView(card)
         }
+        updateAccountSettingCard()
         updateSystemSettingSub()
+    }
+
+    // ==================== 账号卡片展示（设置页顶部「账号」条目） ====================
+
+    /** 读取指定账号 self.json 得到用户实体（与账号配置页同款加载方式）。 */
+    private fun loadUser(userId: String?): UserEntity? {
+        if (StringUtil.isEmpty(userId)) return null
+        UserIdMap.loadSelf(userId!!)
+        return UserIdMap.get(userId)
+    }
+
+    /** 把设置页「账号」卡片同步为当前选中账号的头像与账号信息。 */
+    private fun refreshAccountSettingCard(card: View) {
+        val avatar = card.findViewById<NeoAsyncAvatarView>(R.id.neo_setting_avatar)
+        val icon = card.findViewById<ImageView>(R.id.neo_setting_icon)
+        val name = card.findViewById<TextView>(R.id.neo_setting_name)
+        val sub = card.findViewById<TextView>(R.id.neo_setting_sub)
+
+        val userId = restoreSelectedAccount()
+        if (StringUtil.isEmpty(userId)) {
+            // 未选择账号：保持默认图标与标题，副标题提示默认配置
+            avatar.load(null)
+            avatar.visibility = View.GONE
+            icon.visibility = View.VISIBLE
+            name.text = "账号"
+            sub.text = "默认配置"
+            sub.visibility = View.VISIBLE
+            return
+        }
+        val entity = loadUser(userId)
+        val showName = entity?.showName
+        name.text = if (!StringUtil.isEmpty(showName)) showName else "账号 $userId"
+        sub.text = if (StringUtil.isEmpty(entity?.account)) "userId: $userId" else "账号: ${entity?.account}"
+        sub.visibility = View.VISIBLE
+        if (!StringUtil.isEmpty(entity?.avatar)) {
+            avatar.load(entity?.avatar)
+            avatar.visibility = View.VISIBLE
+            icon.visibility = View.GONE
+        } else {
+            avatar.load(null)
+            avatar.visibility = View.GONE
+            icon.visibility = View.VISIBLE
+        }
+    }
+
+    /** 设置页已构建时：按名称定位「账号」条目并刷新账号信息（切换账号返回主界面时用到）。 */
+    private fun updateAccountSettingCard() {
+        val list = findViewById<LinearLayout>(R.id.neo_setting_list) ?: return
+        if (list.childCount == 0 || !pageInited[3]) return
+        val idx = settings.indexOfFirst { it.name == "账号" }
+        if (idx in 0 until list.childCount) {
+            refreshAccountSettingCard(list.getChildAt(idx))
+        }
     }
 
     // ==================== 系统界面设置应用（悬浮底栏 / 触感 / 设置页摘要） ====================
