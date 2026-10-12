@@ -70,8 +70,11 @@ public abstract class ModelTask extends Model {
             NotificationUtil.trackTaskStart();
             // 每次任务起跑都刷新通知，显示当前正在执行的任务名（并行时以最新起跑的为准）
             NotificationUtil.setStatusTextExec(task.getName());
+            ModelGroup group = task.getGroup();
+            String prevModule = Log.beginModule(group == null ? null : group.getCode());
             Log.record("执行开始-" + task.getName());
             Log.startModuleLogCount();
+            Log.resetUnresolved();
             try {
                 task.run();
             } catch (TaskCancelledException e) {
@@ -87,11 +90,12 @@ public abstract class ModelTask extends Model {
                 Log.restoreDroppedStaleLogCount(droppedPrev);
                 // 还原而非清空：isSync 会在同一线程嵌套起跑，清掉会抹掉外层令牌
                 RunGeneration.restore(prevGen);
-                // 本轮模块未产生任何动作时，在运行日志中给出提示
-                if (Log.stopModuleLogCount() == 0) {
-                    Log.record(task.getName() + "✅本轮无操作");
-                }
+                // 模块收尾汇总：按「是否还有未处理任务」与「本轮是否有动作」给状态
+                Log.moduleSummary(task.getName()
+                        + (Log.isUnresolved() ? "⏳仍有待完成或待领取任务"
+                        : (Log.stopModuleLogCount() == 0 ? "✅本轮无操作" : "✅本轮完成")));
                 Log.record("执行结束-" + task.getName());
+                Log.endModule(prevModule);
                 // 身份化移除：只删本线程登记的那条，避免旧代收尾误删新一代条目
                 MAIN_TASK_MAP.remove(task, Thread.currentThread());
                 task.running.set(false);

@@ -64,7 +64,6 @@ public class ModelOrder {
         clazzList.add(PromoprodRewards.class);
         clazzList.add(HealthIslandRewards.class);
         clazzList.add(AnswerAI.class);
-        clazzList.add(FriendManage.class);
 
         ExtensionsHandle.handleAlphaRequest("ModelOrder", "addExtensionsClass", clazzList);
     }

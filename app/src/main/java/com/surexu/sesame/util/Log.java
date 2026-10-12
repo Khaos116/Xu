@@ -64,6 +64,36 @@ public class Log {
     /** 通用运行日志（用于 system/i 调用），tag 固定为 RUNTIME */
     private static final Logger runtimeLogger = XLog.tag("RUNTIME").printers(RUNTIME_FILE_PRINTER).build();
 
+    /**
+     * 当前线程所属模块（{@code ModelGroup.getCode()}，如 FOREST/FARM/…）。
+     * <p>由 {@link #beginModule} / {@link #endModule} 维护，供 {@link #moduleSummary} 路由分类文件。
+     */
+    private static final ThreadLocal<String> MODULE_TAG = new ThreadLocal<>();
+
+    /**
+     * 进入模块上下文：记录本线程当前模块 code，供收尾汇总路由。
+     *
+     * @return 上一个 tag（可能为 null），收尾时原样传回 {@link #endModule} 以支持嵌套
+     */
+    public static String beginModule(String moduleTag) {
+        String prev = MODULE_TAG.get();
+        if (com.surexu.sesame.util.StringUtil.isEmpty(moduleTag)) {
+            MODULE_TAG.remove();
+        } else {
+            MODULE_TAG.set(moduleTag);
+        }
+        return prev;
+    }
+
+    /** 恢复模块上下文；{@code prev} 为 null 表示退出最外层（回落到 RUNTIME tag） */
+    public static void endModule(String prev) {
+        if (com.surexu.sesame.util.StringUtil.isEmpty(prev)) {
+            MODULE_TAG.remove();
+        } else {
+            MODULE_TAG.set(prev);
+        }
+    }
+
     /** 各模块向 runtime.log 写入时使用的专用 logger（不同 tag，同文件） */
     private static final Logger runtimeForestLogger = XLog.tag("FOREST").printers(RUNTIME_FILE_PRINTER).build();
 
@@ -296,6 +326,48 @@ public class Log {
         countModuleLog();
         writeModuleLog(s, com.surexu.sesame.data.AppConfig.INSTANCE.getEnableViewRuntimeLog(), runtimeOtherLogger,
                 com.surexu.sesame.data.AppConfig.INSTANCE.getEnableOtherLog(), otherLogger);
+    }
+
+    /**
+     * 当前模块是否存在「待完成/待领取」任务（由各模块在收尾探针里 {@link #markUnresolved}）。
+     * <p>仅作收尾汇总文案开关，不参与任何调度。
+     */
+    private static final ThreadLocal<Boolean> MODULE_UNRESOLVED = ThreadLocal.withInitial(() -> false);
+
+    /** 本轮开始前清掉上轮残留 */
+    public static void resetUnresolved() {
+        MODULE_UNRESOLVED.set(false);
+    }
+
+    /** 模块探到仍有待完成/待领取任务时标记 */
+    public static void markUnresolved() {
+        MODULE_UNRESOLVED.set(true);
+    }
+
+    /** 收尾汇总读取 */
+    public static boolean isUnresolved() {
+        return MODULE_UNRESOLVED.get();
+    }
+
+    /**
+     * 模块收尾汇总：按当前模块 tag 路由到对应分类文件，未进入模块上下文时退化为 record。
+     * <p>路由：FOREST/SPECIES→forest，FARM/STALL/ORCHARD→farm，GOLDENBEANS→goldenBeans，其余→other。
+     */
+    public static void moduleSummary(String summary) {
+        String module = MODULE_TAG.get();
+        if (module == null) {
+            record(summary);
+            return;
+        }
+        if (module.contains("FOREST") || module.contains("SPECIES")) {
+            forest(summary);
+        } else if (module.contains("FARM") || module.contains("STALL") || module.contains("ORCHARD")) {
+            farm(summary);
+        } else if (module.contains("GOLDENBEANS")) {
+            goldenBeans(summary);
+        } else {
+            other(summary);
+        }
     }
 
     public static void debug(String s) {

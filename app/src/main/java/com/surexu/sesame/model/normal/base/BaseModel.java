@@ -79,7 +79,7 @@ public class BaseModel extends Model {
             CaptchaHook.updateHooks(com.surexu.sesame.data.AppConfig.INSTANCE.getCloseCaptchaDialog());
             Log.record("✅ 验证码Hook配置已同步");
         } catch (Throwable t) {
-            Log.printStackTrace("❌ 验证码Hook配置同步失败", t);
+            Log.printStackTrace("⚠️ 验证码Hook配置同步失败", t);
         }
     }
     @Override

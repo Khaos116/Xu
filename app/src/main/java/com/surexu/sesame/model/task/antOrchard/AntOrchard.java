@@ -1157,7 +1157,7 @@ public class AntOrchard extends ModelTask {
 
     /** 同轮核对配置（见 TaskAlternative.verify） */
     private static final TaskAlternative.VerifyConfig VERIFY_CFG = new TaskAlternative.VerifyConfig(
-            "AntOrchard", "AntOrchardTaskList", "农场肥料任务", "肥料任务", "🧾完成", true, msg -> Log.farm(msg));
+            "AntOrchard", "AntOrchardTaskList", "农场肥料任务", "肥料任务", true, msg -> Log.farm(msg));
 
     /**
      * 完成任务（两条腿）：先 {@code finishTask}，不成功再用 {@code taskId} 当 bizKey 走 doFarmTask

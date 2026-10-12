@@ -420,9 +420,12 @@ public class FriendManage extends ModelTask {
             JSONArray arr = new JSONArray();
             for (UserEntity ue : toDelete) {
                 JSONObject item = new JSONObject();
-                item.put("userId", ue.getUserId());
+                // getShowName() 可能为 null：Android org.json 的 put(name, null) 会抛 NPE，
+                // 用空串兜底，确保删除请求能正常发出（否则单个 null 会导致整批删除中断）
+                String name = ue.getShowName();
+                item.put("userId", ue.getUserId() != null ? ue.getUserId() : "");
                 item.put("account", ue.getAccount() != null ? ue.getAccount() : "");
-                item.put("name", ue.getShowName());
+                item.put("name", name != null ? name : "");
                 arr.put(item);
             }
 
@@ -436,11 +439,20 @@ public class FriendManage extends ModelTask {
                     String detail = in.getStringExtra("detail");
                     ToastUtil.show(c, result != null ? result : "删除完成");
                     if (detail != null && !detail.isEmpty()) {
-                        new AlertDialog.Builder(c)
-                                .setTitle("删除结果")
-                                .setMessage(detail.trim())
-                                .setPositiveButton("确定", null)
-                                .show();
+                        try {
+                            // 仅当 context 是未销毁的 Activity 时才弹窗；否则丢弃（避免 BadTokenException 闪退）
+                            if (c instanceof android.app.Activity
+                                    && !((android.app.Activity) c).isFinishing()
+                                    && !((android.app.Activity) c).isDestroyed()) {
+                                new AlertDialog.Builder(c)
+                                        .setTitle("删除结果")
+                                        .setMessage(detail.trim())
+                                        .setPositiveButton("确定", null)
+                                        .show();
+                            }
+                        } catch (Throwable ignored) {
+                            // Activity 已销毁时弹窗会抛 BadTokenException，静默忽略即可
+                        }
                     }
                 }
             };

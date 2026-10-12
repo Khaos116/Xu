@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import com.surexu.sesame.hook.ApplicationHook;
 import com.surexu.sesame.util.Log;
 import com.surexu.sesame.util.MessageUtil;
+import com.surexu.sesame.util.Status;
 import com.surexu.sesame.util.TimeUtil;
 
 /**
@@ -100,6 +101,27 @@ public final class TaskAlternative {
     private TaskAlternative() {
     }
 
+    /** 当日已核对完成的标记前缀（key 为任务列表字段 + taskId），次日随 status.json 跨天重置自动恢复。 */
+    private static final String VERIFIED_PREFIX = "verified::";
+
+    /** 本轮已核对完成的任务 id 集合（同轮内重复 verify 不再重复打日志）。 */
+    private static final Set<String> verifiedToday = new java.util.HashSet<>();
+
+    /** 本轮核对时标记：同轮内（跨列表重复出现）只打一次「已按任务列表核对」。 */
+    public static void markVerifiedToday(String key) {
+        verifiedToday.add(key);
+    }
+
+    /** 是否已在本轮核对过（用于去重展示）。 */
+    public static boolean isVerifiedToday(String key) {
+        return verifiedToday.contains(key);
+    }
+
+    /** 清空本轮核对记录（ModelTask 每轮开始前调用）。 */
+    public static void clearVerifiedToday() {
+        verifiedToday.clear();
+    }
+
     /** 唯一的 doFarmTask payload，返回原始响应。 */
     public static String request(String bizKey, String taskSceneCode, String version) {
         if (isTransactionTask(bizKey)) {
@@ -184,17 +206,15 @@ public final class TaskAlternative {
         private final String taskListField;
         private final String listDisplay;
         private final String logPrefix;
-        private final String doneTag;
         private final boolean blacklistByTitle;
         private final LogSink sink;
 
         public VerifyConfig(String moduleName, String taskListField, String listDisplay,
-                            String logPrefix, String doneTag, boolean blacklistByTitle, LogSink sink) {
+                            String logPrefix, boolean blacklistByTitle, LogSink sink) {
             this.moduleName = moduleName;
             this.taskListField = taskListField;
             this.listDisplay = listDisplay;
             this.logPrefix = logPrefix;
-            this.doneTag = doneTag;
             this.blacklistByTitle = blacklistByTitle;
             this.sink = sink;
         }
@@ -231,7 +251,8 @@ public final class TaskAlternative {
                     MessageUtil.MarkTaskBlackList(cfg.moduleName, cfg.taskListField, cfg.listDisplay,
                             cfg.blacklistByTitle ? title : key);
                 } else {
-                    cfg.sink.log(cfg.logPrefix + cfg.doneTag + "[" + title + "]（已按任务列表核对）");
+                    // 核对通过是过程、不是结果：结果由调用方的完成/领取行表达，这里再记一条只会重复
+                    markVerifiedToday(key);
                     changed = true;
                 }
             }

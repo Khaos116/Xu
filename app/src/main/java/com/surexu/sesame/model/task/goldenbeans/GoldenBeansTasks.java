@@ -415,7 +415,7 @@ public final class GoldenBeansTasks {
         // 日志前缀含入口别名，故每入口现构一份
         TaskAlternative.VerifyConfig cfg = new TaskAlternative.VerifyConfig(
                 "goldenbeans", "GoldenBeansTaskList", "金豆夺宝任务",
-                "金豆[" + entry.alias + "]任务", "🧾完成", false, msg -> Log.goldenBeans(msg));
+                "金豆[" + entry.alias + "]任务", false, msg -> Log.goldenBeans(msg));
         return TaskAlternative.verify(pendingVerifyTasks, cfg, () -> {
             JSONObject syncJo = GoldenBeansSupport.parse(goldenbeansRpcCall.pullOf(
                     entry.bizType, entry.source, "FARM_TASK", "TASK_LIST"));
