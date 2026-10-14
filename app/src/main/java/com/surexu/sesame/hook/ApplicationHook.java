@@ -628,6 +628,18 @@ public class ApplicationHook {
      * synchronized 保证同一时刻只有一处重载，防止切号与首启 / 广播重启并发触发重复初始化。
      */
     private synchronized Boolean runInit(Boolean force) {
+        return runInit(force, true);
+    }
+
+    /**
+     * runInit 的实现体。exec 控制是否在重载完成后启动任务链：
+     * <ul>
+     *   <li>exec=true：重载完成后立即 execHandler() 跑任务（首启 / 切号 / 手动执行 / 手动重启）</li>
+     *   <li>exec=false：只重新初始化配置，不触发任务执行（UI 保存配置后仅让新配置生效，
+     *       避免"保存一下配置就被带着跑一整轮任务"）</li>
+     * </ul>
+     */
+    private synchronized Boolean runInit(Boolean force, Boolean exec) {
         destroyHandler(force);
         try {
             if (force) {
@@ -696,7 +708,11 @@ public class ApplicationHook {
                 init = true;
             }
             offline = false;
-            execHandler();
+            if (exec) {
+                execHandler();
+            } else {
+                Log.record("配置已重载，本轮不触发任务执行");
+            }
             return true;
         } catch (Throwable th) {
             Log.err(TAG, "startHandler err:", th);
@@ -706,6 +722,41 @@ public class ApplicationHook {
             // 无论成功/失败/未登录，都复位守卫，允许后续（如切号）再次触发重载
             initializing = false;
         }
+    }
+
+    /**
+     * 「保存配置」专用重载：与 initHandler(true) 相同的前置检查与后台线程投递，
+     * 但重载完成后不启动任务链（runInit(true, false)），避免保存配置被带着跑一整轮任务。
+     */
+    private Boolean reinitHandler() {
+        if (service == null) {
+            return false;
+        }
+        // 快速前置检查：未登录 / 无闹钟权限（与 initHandler(true) 一致）
+        String userId = getUserId();
+        if (userId == null) {
+            Log.record("用户未登录");
+            Toast.show("用户未登录");
+            return false;
+        }
+        if (!PermissionUtil.checkAlarmPermissions()) {
+            Log.record("支付宝无闹钟权限");
+            mainHandler.postDelayed(() -> {
+                if (!PermissionUtil.checkOrRequestAlarmPermissions(context)) {
+                    android.widget.Toast.makeText(context, "请授予支付宝使用闹钟权限", android.widget.Toast.LENGTH_SHORT).show();
+                }
+            }, 2000);
+            return false;
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            if (initializing) {
+                return false;
+            }
+            initializing = true;
+            new Thread(() -> runInit(true, false), "Sesame-Reinit").start();
+            return null;
+        }
+        return runInit(true, false);
     }
 
     /**
@@ -1722,6 +1773,21 @@ public class ApplicationHook {
                             }, "Sesame-Restart").start();
                         }
                         break;
+                    case "com.eg.android.AlipayGphone.sesame.reinit":
+                        // 保存配置专用：只重新初始化配置，不触发任务执行（避免保存配置被带着跑一整轮任务）
+                        String reinitUserId = intent.getStringExtra("userId");
+                        if (StringUtil.isEmpty(reinitUserId) || Objects.equals(UserIdMap.getCurrentUid(), reinitUserId)) {
+                            BroadcastReceiver.PendingResult r3 = goAsync();
+                            new Thread(() -> {
+                                try {
+                                    reinitHandler();
+                                } catch (Throwable th) {
+                                    Log.printStackTrace(TAG, th);
+                                }
+                                r3.finish();
+                            }, "Sesame-Reinit").start();
+                        }
+                        break;
                     case "com.eg.android.AlipayGphone.sesame.execute":
                         // 配置页"执行"按钮会带 group（ModelGroup 的 code）：BASE＝全部任务，
                         // 其余只跑该分组的任务；不带 group 时保持原行为（整轮执行）。
@@ -1977,6 +2043,7 @@ public class ApplicationHook {
 
             IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction("com.eg.android.AlipayGphone.sesame.restart");
+            intentFilter.addAction("com.eg.android.AlipayGphone.sesame.reinit");
             intentFilter.addAction("com.eg.android.AlipayGphone.sesame.execute");
             intentFilter.addAction("com.eg.android.AlipayGphone.sesame.reLogin");
             intentFilter.addAction("com.eg.android.AlipayGphone.sesame.status");

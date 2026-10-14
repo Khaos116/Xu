@@ -787,6 +787,8 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
      * 用服务端能量明细**覆盖**今日收取能量，取代逐点累加的口径。
      * <p>只统计**今日 0 点之后**的记录：{@code nextId} 是时间戳游标，从 0 开始倒序翻页，
      * 一旦遇到早于今日起点的记录即可停止（更早的必定更旧）。
+     * <p>只计**进账**（energy>0）：明细里混有合种浇水等支出记录（energy 为负），
+     * 按净额求和会让今日/本月/今年统计与支付宝展示对不上。
      * <p>拉取失败或解析不到记录时保留原值——覆盖是"定值"，不该把已有统计冲成 0。
      */
     private void syncTodayCollectedFromServer() {
@@ -831,7 +833,13 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
                         break;
                     }
                     scanned++;
-                    todayTotal += record.optInt("energy", 0);
+                    // 服务端明细同时含进账（收取能量）与支出（如合种浇水、能量捐赠），支出记录 energy 为负。
+                    // 只计进账（energy>0）才能与支付宝展示口径一致——按净额求和会把支出也扣进去，
+                    // 导致今日/本月/今年统计全部偏小、与支付宝对不上。
+                    int energy = record.optInt("energy", 0);
+                    if (energy > 0) {
+                        todayTotal += energy;
+                    }
                 }
                 if (reachedOlder || !resData.optBoolean("hasMore", false)) {
                     break;
@@ -2909,7 +2917,8 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
                 return;
             }
             if (!jo.has("energyRainEndGameGroupTask")) {
-                Status.flagToday("EnergyRain::PlayGame");
+                // 响应里没有任务组：可能是接口异常/活动未下发，取不到状态不落标记，留给下一轮
+                Log.record("森林救援队🐱查询响应无任务组，不落标记，留待下一轮");
                 return;
             }
 
@@ -2947,8 +2956,47 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
                     || "NOT_TRIGGER".equals(sljydStatus);
 
             if (shouldReport) {
-                GameTask.Forest_sljyd.report("森林", 1);
-                Status.flagToday("EnergyRain::PlayGame");
+                // 上报后用同步版等待结果，只有成功上报且回读确认服务端状态推进才落当日标记；
+                // 上报失败/回读取不到状态一律不落标记，留给下一轮再试
+                int successes = GameTask.Forest_sljyd.reportSync("森林", 1);
+                if (successes <= 0) {
+                    Log.record("森林救援队🐱上报未成功(成功" + successes + "次)，不落标记，留待下一轮");
+                    return;
+                }
+
+                // 上报成功后回读一次任务状态，确认服务端已推进
+                String afterStatus = null;
+                try {
+                    JSONObject recheckJo = new JSONObject(AntForestRpcCall.queryEnergyRainEndGameList());
+                    if (MessageUtil.checkResultCode(TAG, recheckJo)) {
+                        JSONObject recheckGroupTask = recheckJo.optJSONObject("energyRainEndGameGroupTask");
+                        JSONArray recheckTaskInfoList = recheckGroupTask != null ? recheckGroupTask.optJSONArray("taskInfoList") : null;
+                        if (recheckTaskInfoList != null) {
+                            for (int i = 0; i < recheckTaskInfoList.length(); i++) {
+                                JSONObject task = recheckTaskInfoList.optJSONObject(i);
+                                JSONObject baseInfo = task != null ? task.optJSONObject("taskBaseInfo") : null;
+                                if (baseInfo != null && "GAME_DONE_SLJYD".equals(baseInfo.optString("taskType"))) {
+                                    afterStatus = baseInfo.optString("taskStatus");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } catch (Throwable th) {
+                    Log.printStackTrace("森林救援队🐱回读确认失败:", th);
+                }
+
+                if (afterStatus == null) {
+                    Log.record("森林救援队🐱上报成功但回读取不到状态，不落标记，留待下一轮确认");
+                    return;
+                }
+                boolean progressed = !"TODO".equals(afterStatus) && !"NOT_TRIGGER".equals(afterStatus);
+                if (progressed) {
+                    Log.record("森林救援队🐱上报成功，回读状态[" + afterStatus + "]已推进，今日标记完成");
+                    Status.flagToday("EnergyRain::PlayGame");
+                } else {
+                    Log.record("森林救援队🐱上报成功但回读状态[" + afterStatus + "]未推进，不落标记，留待下一轮");
+                }
                 return;
             }
             Log.record("森林救援队🐱无需上报(状态:" + sljydStatus + ")，今日跳过");
@@ -4587,6 +4635,9 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
     /** 单分类翻页上限：hasMore 异常一直为真时兜底 */
     private static final int VITALITY_ITEM_MAX_PAGES = 10;
 
+    /** 活力兑换遇「系统繁忙」的当日重试上限：临时故障按次计数，达到上限才当日停（不再一次繁忙就封死当天） */
+    private static final int MAX_VITALITY_EXCHANGE_BUSY = 3;
+
     /**
      * 获取活力值商店所有商品信息。
      * <p>原先只查 SC_ASSETS 的第一页 ⇒ 权益列表只有一小部分；改为按官方实测的 5 个 labelType
@@ -4737,9 +4788,17 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
             JSONObject jo = new JSONObject(AntForestRpcCall.exchangeBenefit(spuId, skuId));
             if (jo.has("errorMessage")) {
                 String errorMessage = jo.optString("errorMessage");
-                //如果出错今天停止兑换
+                //「系统繁忙」是临时故障：按次计数，达到当日上限才落"今日停止"标记；
+                // 不再一次繁忙就把当天封死，下一轮任务仍会继续尝试
                 if (errorMessage.equals("系统繁忙，请稍后再试。")) {
-                    Status.flagToday("forest::exchangeLimit::" + skuId);
+                    int busyCount = Status.getIntFlagToday("forest::exchangeBusy::" + skuId) + 1;
+                    if (busyCount >= MAX_VITALITY_EXCHANGE_BUSY) {
+                        Status.flagToday("forest::exchangeLimit::" + skuId);
+                        Log.record("活力兑换🎐[" + skuId + "]系统繁忙已达当日上限(" + busyCount + "次)，今日停止");
+                    } else {
+                        Status.setIntFlagToday("forest::exchangeBusy::" + skuId, busyCount);
+                        Log.record("活力兑换🎐[" + skuId + "]系统繁忙(第" + busyCount + "次)，暂不落标记");
+                    }
                 }
             }
             return MessageUtil.checkResultCode(TAG, jo);

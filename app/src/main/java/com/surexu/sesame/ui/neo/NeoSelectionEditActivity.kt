@@ -310,9 +310,9 @@ class NeoSelectionEditActivity : AppCompatActivity() {
         if (saved) {
             dirty = false
             ToastUtil.show(this, "已保存")
-            // 通知支付宝主进程重启模块，让新配置立即生效（与设置页同款）。
+            // 保存配置只重新初始化、不触发任务执行（与设置页同款 reinit 广播）
             try {
-                sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.restart"))
+                sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.reinit"))
             } catch (th: Throwable) {
                 Log.printStackTrace(th)
             }

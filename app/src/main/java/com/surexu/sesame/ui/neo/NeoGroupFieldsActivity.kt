@@ -119,7 +119,8 @@ class NeoGroupFieldsActivity : AppCompatActivity() {
             // hasFieldChanges 依赖 ConfigPreload 已加载（valueBaseline 非空），
             // 未加载时恒为 false，因此必须保证 onCreate 里先 prepare 再进本方法。
             if (ConfigV2.hasFieldChanges() && ConfigV2.save(currentConfigUserId(), false)) {
-                sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.restart"))
+                // 保存配置只重新初始化、不触发任务执行（reinit 广播）
+                sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.reinit"))
                 modified = false
             }
         } catch (t: Throwable) {

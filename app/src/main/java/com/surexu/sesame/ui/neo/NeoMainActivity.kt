@@ -378,7 +378,8 @@ class NeoMainActivity : AppCompatActivity() {
             val backupDir = FileUtil.getBackupDirectoryFile()
             backupDir.listFiles()?.forEach { it.delete() }
             ConfigV2.unload()
-            sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.restart"))
+            // 清除配置只重新初始化、不触发任务执行（reinit 广播）
+            sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.reinit"))
             Toast.makeText(this, "已清除配置", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(this, "清除配置失败", Toast.LENGTH_SHORT).show()
@@ -1337,7 +1338,8 @@ class NeoMainActivity : AppCompatActivity() {
             }
             ConfigV2.unload()
             ConfigV2.load(userId)
-            sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.restart"))
+            // 保存配置只重新初始化、不触发任务执行（reinit 广播）
+            sendBroadcast(Intent("com.eg.android.AlipayGphone.sesame.reinit"))
             Toast.makeText(this, "已从 ${backup.name} 恢复", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(this, "恢复失败：" + (e.message ?: ""), Toast.LENGTH_SHORT).show()
