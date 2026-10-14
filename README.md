@@ -62,11 +62,11 @@ Sure-Xu 是一套面向支付宝芝麻粒生态的**免 root 自动化模块**�
 
 ## 下载
 
-最新版 **v3.3.3**（单包通吃，安装一个即可）：
+最新版 **v3.3.4**（单包通吃，安装一个即可）：
 
 | 版本 | 适用环境 | APK |
 | --- | --- | --- |
-| **Normal** | 单包双入口：libxposed API 102（LSPosed 等免 Root 新框架）+ 传统 Xposed API 82~93（`assets/xposed_init`，Root / 传统框架） | [Sure-Xu-Normal-3.3.3.apk](https://github.com/yu1989324402/Xu/releases/download/v3.3.3/Sure-Xu-Normal-3.3.3.apk) |
+| **Normal** | 单包双入口：libxposed API 102（LSPosed 等免 Root 新框架）+ 传统 Xposed API 82~93（`assets/xposed_init`，Root / 传统框架） | [Sure-Xu-Normal-3.3.4.apk](https://github.com/yu1989324402/Xu/releases/download/v3.3.4/Sure-Xu-Normal-3.3.4.apk) |
 
 每个 APK 附带同名 `.sha256` 校验文件，全部版本见 [Releases](https://github.com/yu1989324402/Xu/releases)。
 
@@ -93,8 +93,8 @@ Sure-Xu 是一套面向支付宝芝麻粒生态的**免 root 自动化模块**�
 ```bash
 # 环境：JDK 17+ / Android SDK（platforms;android-37、build-tools）
 # 使用本地预装 Gradle 发行版构建（勿用 ./gradlew wrapper，发行版下载易超时）
-gradle assembleNormalRelease -Pversion=3.3.3
-# 产物：app/build/outputs/apk/normal/release/Sure-Xu-Normal-3.3.3.apk（已签名）
+gradle assembleNormalRelease -Pversion=3.3.4
+# 产物：app/build/outputs/apk/normal/release/Sure-Xu-Normal-3.3.4.apk（已签名）
 ```
 
 签名读取 `app/keystore.properties`（不入库，首次克隆后需自备）：
