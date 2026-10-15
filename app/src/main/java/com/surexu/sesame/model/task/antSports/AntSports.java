@@ -134,8 +134,8 @@ public class AntSports extends ModelTask {
         modelFields.addField(AutoAntSportsTaskList = new BooleanModelField("AutoAntSportsTaskList", "运动任务 | 自动黑名单", true).setDependsOn("sportsTasks"));
         modelFields.addField(AntSportsTaskList = new SelectModelField("AntSportsTaskList", "运动任务 | 黑名单列表", new LinkedHashSet<>(), AlipayAntSportsTaskList::getList).setDependsOn("AutoAntSportsTaskList"));
         modelFields.addField(receiveCoinAsset = new BooleanModelField("receiveCoinAsset", "收运动币", false));
-        //modelFields.addField(donateCharityCoinType = new ChoiceModelField("donateCharityCoinType", "捐运动币 | 方式", DonateCharityCoinType.ZERO, DonateCharityCoinType.nickNames));
-        //modelFields.addField(donateCharityCoinAmount = new IntegerModelField("donateCharityCoinAmount", "捐运动币 | 数量" + "(每次)", 100));
+        modelFields.addField(donateCharityCoinType = new ChoiceModelField("donateCharityCoinType", "捐运动币 | 方式", DonateCharityCoinType.ZERO, DonateCharityCoinType.nickNames));
+        modelFields.addField(donateCharityCoinAmount = new IntegerModelField("donateCharityCoinAmount", "捐运动币 | 数量" + "(每次)", 100));
         //modelFields.addField(coinExchangeDoubleCard = new BooleanModelField("coinExchangeDoubleCard", "运动币兑换限时能量双击卡", false));
         modelFields.addField(club = new BooleanModelField("club", "抢好友 | 开启", false));
         modelFields.addField(clubTrainItemType = new ChoiceModelField("clubTrainItemType", "抢好友 | 训练动作", TrainItemType.NONE, TrainItemType.nickNames).setDependsOn("club"));
@@ -281,6 +281,11 @@ public class AntSports extends ModelTask {
             if (receiveCoinAsset.getValue()) {
                 receiveCoinAsset();
                 AntSportsRpcCall.pickAllEnergyBall();
+            }
+
+            // 捐运动币（开关由用户控制，默认不捐赠；上游默认关闭）
+            if (donateCharityCoinType.getValue() != DonateCharityCoinType.ZERO) {
+                queryProjectList();
             }
 
             //执行悦动健康岛

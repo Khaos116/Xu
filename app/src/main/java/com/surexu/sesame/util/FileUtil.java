@@ -570,6 +570,10 @@ public class FileUtil {
     public static File getWelfareFundTaskListMapFile() {
         return getFile(MAIN_DIRECTORY_FILE, "WelfareFundTask.json");
     }
+
+    public static File getGoldTicketTaskListMapFile() {
+        return getFile(MAIN_DIRECTORY_FILE, "GoldTicketTask.json");
+    }
     
     /** 自动拉黑记录（含日期），用于"超期自动解禁重试" */
     public static File getAutoBlackListMapFile() {

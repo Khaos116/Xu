@@ -252,6 +252,7 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
     private BooleanModelField collectGiftBox;
     private BooleanModelField medicalHealth;
     private BooleanModelField greenLife;
+    private BooleanModelField marketBrowseTask;
 
     private BooleanModelField greenRent;
     private ChoiceModelField consumeAnimalPropType;
@@ -372,6 +373,7 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
         modelFields.addField(collectGiftBox = new BooleanModelField("collectGiftBox", "领取礼盒", false));
         modelFields.addField(medicalHealth = new BooleanModelField("medicalHealth", "医疗健康", false));
         modelFields.addField(greenLife = new BooleanModelField("greenLife", "森林集市", false));
+        modelFields.addField(marketBrowseTask = new BooleanModelField("marketBrowseTask", "绿植浏览", false));
         modelFields.addField(greenRent = new BooleanModelField("greenRent", "绿色租赁", false));
         modelFields.addField(youthPrivilege = new BooleanModelField("youthPrivilege", "青春特权 | 森林道具", false));
         modelFields.addField(ecoLife = new BooleanModelField("ecoLife", "绿色行动 | 开启", false));
@@ -714,6 +716,11 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
                     greenLife();
                 }
 
+                // 绿植浏览（独立任务，与森林集市无关）
+                if (marketBrowseTask.getValue()) {
+                    GreenPlantBrowse.run();
+                }
+
                 // 绿色租赁
                 if (greenRent.getValue()) {
                     if (!Status.hasFlagToday("Forest::greenRent")) {
@@ -772,6 +779,9 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
             } catch (InterruptedException ie) {
                 Log.i(TAG, "执行中断-蚂蚁森林");
             }
+            // 倍卡额外能量放到最后收：此时本轮的能量（含异步收取的好友能量）才累积完，
+            // 放在收取之前只能收到上一轮攒下的部分
+            collectRobExpandEnergy();
             Statistics.save();
             FriendWatch.save();
         }
@@ -1666,18 +1676,48 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
             }
             for (int i = 0; i < ja.length(); i++) {
                 JSONObject jo = ja.getJSONObject(i);
-                String propGroup = jo.getString("propGroup");
-                Long endTime = jo.getLong("endTime");
-                String propId = jo.getString("propId");
-                String propType = jo.getString("propType");
-                usingProps.put(propGroup, endTime);
-                if (PropGroup.robExpandCard.name().equals(propGroup)) {
-                    collectRobExpandEnergy(jo.optString("extInfo"), propId, propType);
-                }
+                usingProps.put(jo.getString("propGroup"), jo.getLong("endTime"));
             }
             forestExtensions();
         } catch (Throwable th) {
             Log.err(TAG, "updateUsingPropsEndTime err:", th);
+        }
+    }
+
+    /**
+     * 收取倍卡额外能量（本轮收尾调用）。倍卡额度是本轮收取行为累积出来的，
+     * 先收只能收到上一轮攒下的部分，本轮领到的要等到下一轮；且好友能量是异步收取，
+     * 必须等子任务跑完再查，否则查到的仍是未累积的旧值。
+     */
+    private void collectRobExpandEnergy() {
+        if (!collectRobExpandEnergyEnable.getValue()) {
+            return;
+        }
+        try {
+            JSONObject joHomePage = new JSONObject(AntForestRpcCall.queryHomePage());
+            if (MessageUtil.checkResultCode(TAG, joHomePage)) {
+                collectRobExpandEnergy(joHomePage);
+            }
+        } catch (Throwable th) {
+            Log.err(TAG, "collectRobExpandEnergy err:", th);
+        }
+    }
+
+    /** 从首页响应里取出在用的倍卡并收取 */
+    private void collectRobExpandEnergy(JSONObject joHomePage) {
+        try {
+            JSONArray ja = joHomePage.getJSONArray("loginUserUsingPropNew");
+            if (ja.length() == 0) {
+                ja = joHomePage.getJSONArray("usingUserPropsNew");
+            }
+            for (int i = 0; i < ja.length(); i++) {
+                JSONObject jo = ja.getJSONObject(i);
+                if (PropGroup.robExpandCard.name().equals(jo.getString("propGroup"))) {
+                    collectRobExpandEnergy(jo.optString("extInfo"), jo.getString("propId"), jo.getString("propType"));
+                }
+            }
+        } catch (Throwable th) {
+            Log.err(TAG, "collectRobExpandEnergy err:", th);
         }
     }
 
@@ -1777,28 +1817,6 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
             Log.err(TAG, "harvestForestEnergy err:", th);
         }
         return false;
-    }
-
-    /**
-     * 检查并处理6秒拼手速逻辑（每天主动执行一次）
-     */
-    private void whackMole() {
-        try {
-            if (whackModeName.getValue() == whackModeNames.CLOSE) {
-                // 检查今天是否已执行过打地鼠
-                if (Status.hasFlagToday("forest::whackMole::executed")) {
-                    Log.record("⏭️ 今天已完成过6秒拼手速，跳过执行");
-                } else {
-                    // 主动执行打地鼠（今日首次）
-                    Log.record("🎮 开始执行6秒拼手速（今日首次）");
-                    checkAndHandleWhackMole();
-                    Status.flagToday("forest::whackMole::executed");
-                    Log.record("✅ 6秒拼手速已完成，今天不再执行");
-                }
-            }
-        } catch (Throwable t) {
-            Log.err(TAG, "whackMole err:", t);
-        }
     }
 
     private void checkAndHandleWhackMole() {
@@ -2544,10 +2562,12 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
                         continue;
                     }
 
-                    // 做不了的当天只试一次、临时故障留待下一轮（见 TaskAttemptPolicy）
+                    // 做不了的当天只试一次、临时故障留待下一轮（见 TaskAttemptPolicy）。
+                    // 带活力值探针：伪申报后由探针重拉列表验证，避免"发过但不知成没成"
                     Outcome outcome = TaskAttemptPolicy.handle("forest::" + sceneCode + "/" + taskType, taskTitle, null,
                             () -> attemptFinishTask(sceneCode, taskType, taskTitle), Log::forest,
-                            new TaskAttemptPolicy.Site("AntForestVitalityTaskList", "森林任务", taskType, sceneCode));
+                            new TaskAttemptPolicy.Site("AntForestVitalityTaskList", "森林任务", taskType, sceneCode,
+                                    (k) -> probeForestVitalityStatus(sceneCode, taskType)));
                     doubleCheck = outcome == Outcome.DONE || outcome == Outcome.TRIGGERED;
                 }
             }
@@ -3139,6 +3159,9 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
                     String sceneCode = task.optString("sceneCode", "");
                     String taskType = task.optString("taskType", "");
                     String groupId = task.optString("groupId", "");
+                    // 开箱类任务的完成条件是**服务端的开箱计数**，申报完成不会让计数推进
+                    // （申报只会被拒，伪申报被拒后又会被判"兜底未生效"拉黑），只能真去开箱
+                    String actionType = bizInfo.optString("actionType", "");
                     // 去重键带轮次与阶段序号：同一轮内同阶段只动作一次（防重复请求），
                     // 但下一轮可再试——服务端状态推进有延迟，跨轮仍可能落到新阶段
                     String attemptKey = taskType + "#" + rightsTimes + "@" + round;
@@ -3152,11 +3175,13 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
                     if (AntForestVitalityTaskList.getValue().contains(title)) {
                         continue;
                     }
-                    // 底线：交易/支付/充值类一律不申报、一次即永久拉黑，绝不伪造。
+                    // 底线：硬交易/支付/充值类一律不申报、一次即永久拉黑，绝不伪造。
                     // 必须同时查 groupId：充值类的 taskType 常无关键词，判据在 groupId（cz=充值）
-                    if (TaskAlternative.isTransactionTask(taskType)
-                            || TaskAlternative.isTransactionTask(groupId)
-                            || TaskAlternative.isTransactionTask(sceneCode)) {
+                    // 软判据（_cz 数字等疑似充值）放行：限定活动实测部分可通过伪申报完成，
+                    // 失败/风控由 TaskAttemptPolicy 的自动黑名单兜底。
+                    if (TaskAlternative.isTransactionTaskHard(taskType)
+                            || TaskAlternative.isTransactionTaskHard(groupId)
+                            || TaskAlternative.isTransactionTaskHard(sceneCode)) {
                         // 同一轮只拉一次：该分支不做去重的话，多轮重拉会把同一批任务反复写盘并刷屏
                         if (attempted.add(blackTaskKey(title))) {
                             MessageUtil.MarkTaskBlackListPermanent("AntForestV2", "AntForestVitalityTaskList",
@@ -3204,9 +3229,14 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
                                 + (rightsTimesLimit > 1 ? "#" + rightsTimes : "");
                         // 走统一策略：400000040 时由 TaskAttemptPolicy 代为 doFarmTask 伪申报，
                         // 裸调 finishTask 会把 UNSUPPORTED 吞成 false，兜底永不触发
+                        // 开箱类任务的尝试动作 = 真去开箱（申报完成对它是无效动作）；
+                        // 其余任务仍走 finishTask 上报
+                        final boolean unwrapTask = isUnwrapAction(actionType);
                         Outcome outcome = TaskAttemptPolicy.handle(
                                 policyKey, label, null,
-                                () -> attemptFinishTask(sceneCode, taskType, label), Log::forest,
+                                () -> unwrapTask
+                                        ? openForestLeyuanBoxes(title)
+                                        : attemptFinishTask(sceneCode, taskType, label), Log::forest,
                                 new TaskAttemptPolicy.Site("AntForestVitalityTaskList", "森林乐园限定任务",
                                         taskType, sceneCode, TaskAlternative.DEFAULT_VERSION, null,
                                         (k) -> probeOptionalPlayExhausted(sceneCode, taskType)));
@@ -3229,6 +3259,46 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
         }
     }
 
+    /** 开箱类动作（累计开箱 N 个）：完成条件在服务端的开箱计数上，只能真开箱，申报无效 */
+    private static boolean isUnwrapAction(String actionType) {
+        return "ACC_UNWRAP".equals(actionType) || "UNWRAP".equals(actionType);
+    }
+
+    /**
+     * 开箱类乐园任务的尝试动作：把当前可开宝箱一次开完。
+     * <p>只开**待开的**（{@code quotaCanUse}），没有可开的就直接返回 UNABLE——
+     * 此时任务没完成是因为宝箱不够，不是接口不行，故让策略按"未完成"处理而不是伪申报。
+     */
+    private Outcome openForestLeyuanBoxes(String taskTitle) {
+        try {
+            JSONObject jo = new JSONObject(AntForestRpcCall.queryGameList());
+            if (!MessageUtil.checkResultCode(TAG, jo)) {
+                return Outcome.RETRY;
+            }
+            JSONObject drawRights = jo.optJSONObject("gameCenterDrawRights");
+            if (drawRights == null) {
+                return Outcome.RETRY;
+            }
+            int perTime = drawRights.optInt("quotaPerTime", 100);
+            int canUseCount = perTime <= 0 ? 0 : drawRights.optInt("quotaCanUse") / perTime;
+            if (canUseCount <= 0) {
+                // 没有可开的箱子：完成不了是"箱子不够"，不是接口不支持，不能退到伪申报
+                Log.forest("森林乐园🎁暂无可开宝箱#待攒够箱子");
+                return Outcome.UNABLE;
+            }
+            JSONObject drawJo = new JSONObject(AntForestRpcCall.drawGameCenterAward(canUseCount));
+            if (!MessageUtil.checkResultCode(TAG, drawJo)) {
+                return MessageUtil.isRetryable(drawJo) || MessageUtil.isServerBusy(drawJo)
+                        ? Outcome.RETRY : Outcome.UNABLE;
+            }
+            Log.forest("森林乐园🎁开宝箱×" + canUseCount + "#用于[" + taskTitle + "]");
+            return Outcome.DONE;
+        } catch (Throwable t) {
+            Log.err(TAG, "openForestLeyuanBoxes err:", t);
+        }
+        return Outcome.RETRY;
+    }
+
     /** 乐园限定任务单轮最大重拉次数：正常由「本轮无任何可执行/可领取动作」提前收工，
      * 此上限只防服务端恒回 TODO 时死循环。
      * <p>必须按**各任务阶段数之和**给足：每次重拉每个任务最多推进一档，多个多阶段任务
@@ -3246,6 +3316,22 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
         }
         // 至少 12，最多 60：给足阶段数，也防任务列表异常时长时间空转
         return Math.min(Math.max(total + 6, 12), 60);
+    }
+
+    /** 活力值任务探针：重拉任务列表，读 {@code taskBaseInfo.taskStatus} 兜底验证（上游 v1.3.9 对齐）。 */
+    private static TaskAttemptPolicy.ProbeResult probeForestVitalityStatus(String sceneCode, String taskType) {
+        // 状态在 taskBaseInfo 子对象内
+        return TaskAttemptPolicy.probeByList(TAG, AntForestRpcCall::listTaskopengreen, "taskInfoList",
+                jo -> MessageUtil.checkResultCode(TAG, jo),
+                taskInfo -> {
+                    JSONObject taskBaseInfo = taskInfo.optJSONObject("taskBaseInfo");
+                    if (taskBaseInfo == null
+                            || !sceneCode.equals(taskBaseInfo.optString("sceneCode"))
+                            || !taskType.equals(taskBaseInfo.optString("taskType"))) {
+                        return null;
+                    }
+                    return taskBaseInfo.optString("taskStatus");
+                });
     }
 
     /** 打满判据：重拉乐园限定任务列表，读该任务的已做次数是否达上限。 */

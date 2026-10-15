@@ -7,6 +7,7 @@ import java.util.List;
 import com.surexu.sesame.hook.ApplicationHook;
 import com.surexu.sesame.model.base.TaskAlternative;
 import com.surexu.sesame.util.RandomUtil;
+import com.surexu.sesame.util.StringUtil;
 import com.surexu.sesame.util.idMap.UserIdMap;
 
 public class AntOrchardRpcCall {
@@ -139,7 +140,7 @@ public class AntOrchardRpcCall {
     }
 
     public static String switchPlantScene(String sceneName) {
-        return ApplicationHook.requestString("com.alipay.antorchard.switchPlantScene", "[{\"plantScene\":\"" + sceneName + "\",\"requestType\":\"NORMAL\",\"sceneCode\":\"ORCHARD\",\"source\":\"ANTFARM_ORCHARD\"}]");
+        return ApplicationHook.requestString("com.alipay.antorchard.switchPlantScene", "[{\"plantScene\":\"" + StringUtil.escapeJson(sceneName) + "\",\"requestType\":\"NORMAL\",\"sceneCode\":\"ORCHARD\",\"source\":\"ANTFARM_ORCHARD\"}]");
     }
 
     public static String choosePrize(String orderId) {

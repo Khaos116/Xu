@@ -3,7 +3,7 @@ package com.surexu.sesame.model.task.greenFinance;
 import org.json.JSONArray;
 
 import com.surexu.sesame.hook.ApplicationHook;
-import com.surexu.sesame.model.common.rpcCall.BaseTaskRpcCall;
+import com.surexu.sesame.model.common.rpcCall.BasePromoTaskRpcCall;
 import com.surexu.sesame.util.idMap.UserIdMap;
 
 /**
@@ -11,7 +11,7 @@ import com.surexu.sesame.util.idMap.UserIdMap;
  *
  * @author xiong
  */
-public class GreenFinanceRpcCall extends BaseTaskRpcCall {
+public class GreenFinanceRpcCall extends BasePromoTaskRpcCall {
 
     /**
      * 绿色经营首页

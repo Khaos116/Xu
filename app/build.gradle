@@ -4,7 +4,7 @@ android {
     def version = project.getProperties().get("version")
     if (version == null || "unspecified".equalsIgnoreCase(version)) {
         // 默认版本号；正式发布时由 CI 通过 -Pversion=<tag> 覆盖
-        version = "1.0.0"
+        version = "3.3.5"
     }
     project.ext.appVersion = version
     def gitCommitHash = "unknown"

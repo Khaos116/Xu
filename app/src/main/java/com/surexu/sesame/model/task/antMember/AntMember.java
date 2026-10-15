@@ -13,9 +13,11 @@ import com.surexu.sesame.data.modelFieldExt.SelectModelField;
 import com.surexu.sesame.data.modelFieldExt.StringModelField;
 import com.surexu.sesame.data.task.ModelTask;
 import com.surexu.sesame.entity.AlipayAntMemberTaskList;
+import com.surexu.sesame.entity.AlipayGoldTicketTaskList;
 import com.surexu.sesame.entity.AlipayWelfareFundTaskList;
 import com.surexu.sesame.entity.AlipayMemberCreditSesameTaskList;
 import com.surexu.sesame.entity.MemberBenefit;
+import com.surexu.sesame.entity.PromiseSimpleTemplate;
 import com.surexu.sesame.hook.ApplicationHook;
 import com.surexu.sesame.model.base.TaskCommon;
 import com.surexu.sesame.model.base.TaskAlternative;
@@ -23,8 +25,8 @@ import com.surexu.sesame.model.extensions.ExtensionsHandle;
 import com.surexu.sesame.model.task.antOrchard.AntOrchard;
 import com.surexu.sesame.model.task.antOrchard.AntOrchardRpcCall;
 import com.surexu.sesame.util.*;
-import com.surexu.sesame.util.idMap.AntFarmDoFarmTaskListMap;
 import com.surexu.sesame.util.idMap.AntMemberTaskListMap;
+import com.surexu.sesame.util.idMap.GoldTicketTaskListMap;
 import com.surexu.sesame.util.idMap.MemberBenefitIdMap;
 import com.surexu.sesame.util.idMap.MemberCreditSesameTaskListMap;
 import com.surexu.sesame.util.idMap.PromiseSimpleTemplateIdMap;
@@ -81,8 +83,12 @@ public class AntMember extends ModelTask {
     private BooleanModelField promise;
     private SelectModelField promiseList;
     private BooleanModelField enableGameCenter;
-    private BooleanModelField enableGoldTicket;
+    private BooleanModelField enableGoldTicketTask;
+    private BooleanModelField enableGoldTicketSign;
     private BooleanModelField enableGoldTicketConsume;
+    private BooleanModelField enableGoldTicketBrowse;
+    private BooleanModelField AutoGoldTicketTaskList;
+    private SelectModelField GoldTicketTaskList;
     private BooleanModelField KuaiDiFuLiJia;
     private BooleanModelField welfareFund;
     private BooleanModelField welfareFundSign;
@@ -129,11 +135,15 @@ public class AntMember extends ModelTask {
         modelFields.addField(MemberCreditSesameTaskList = new SelectModelField("MemberCreditSesameTaskList", "芝麻粒任务 | 黑名单列表", new LinkedHashSet<>(), AlipayMemberCreditSesameTaskList::getList).setDependsOn("AutoMemberCreditSesameTaskList"));
         modelFields.addField(SesameGrowthBehavior = new BooleanModelField("SesameGrowthBehavior", "攒芝麻分进度", false));
         modelFields.addField(enableGameCenter = new BooleanModelField("enableGameCenter", "游戏中心 | 得乐园豆", false));
-        //modelFields.addField(promise = new BooleanModelField("promise", "生活记录 | 坚持做", false));
-        //modelFields.addField(promiseList = new SelectModelField("promiseList", "生活记录 | 坚持做列表", new LinkedHashSet<>(), PromiseSimpleTemplate::getList));
+        modelFields.addField(promise = new BooleanModelField("promise", "生活记录 | 坚持做", false));
+        modelFields.addField(promiseList = new SelectModelField("promiseList", "生活记录 | 坚持做列表", new LinkedHashSet<>(), PromiseSimpleTemplate::getList));
         modelFields.addField(KuaiDiFuLiJia = new BooleanModelField("KuaiDiFuLiJia", "我的快递 | 福利加", false));
-        modelFields.addField(enableGoldTicket = new BooleanModelField("enableGoldTicket", "黄金票 | 签到与收取", false));
-        modelFields.addField(enableGoldTicketConsume = new BooleanModelField("enableGoldTicketConsume", "黄金票 | 提取/兑换黄金", false));
+        modelFields.addField(enableGoldTicketTask = new BooleanModelField("enableGoldTicketTask", "黄金票 | 开启", false));
+        modelFields.addField(enableGoldTicketSign = new BooleanModelField("enableGoldTicketSign", "黄金票 | 签到", false).setDependsOn("enableGoldTicketTask"));
+        modelFields.addField(enableGoldTicketConsume = new BooleanModelField("enableGoldTicketConsume", "黄金票 | 提取", false).setDependsOn("enableGoldTicketTask"));
+        modelFields.addField(enableGoldTicketBrowse = new BooleanModelField("enableGoldTicketBrowse", "黄金票 | 任务", false).setDependsOn("enableGoldTicketTask"));
+        modelFields.addField(AutoGoldTicketTaskList = new BooleanModelField("AutoGoldTicketTaskList", "黄金票任务 | 自动黑名单", true).setDependsOn("enableGoldTicketBrowse"));
+        modelFields.addField(GoldTicketTaskList = new SelectModelField("GoldTicketTaskList", "黄金票任务 | 黑名单列表", new LinkedHashSet<>(), AlipayGoldTicketTaskList::getList).setDependsOn("AutoGoldTicketTaskList"));
         modelFields.addField(merchantSignIn = new BooleanModelField("merchantSignIn", "商家服务 | 签到", false));
         modelFields.addField(merchantKMDK = new BooleanModelField("merchantKMDK", "商家服务 | 开门打卡", false));
         modelFields.addField(alchemyTask = new BooleanModelField("alchemyTask", "芝麻炼金", false));
@@ -183,7 +193,12 @@ public class AntMember extends ModelTask {
                 CheckInTaskRpcManager();
                 collectSesame();
             }
-            
+
+            //生活记录（开关由用户控制，默认关闭；上游默认关闭）
+            if (promise.getValue()) {
+                promise();
+            }
+
             //芝麻炼金
             if (alchemyTask.getValue()) {
                 doSesameAlchemy();
@@ -216,7 +231,7 @@ public class AntMember extends ModelTask {
                 RecommendTask();
                 OrdinaryTask();
             }
-            if (enableGoldTicket.getValue() || enableGoldTicketConsume.getValue()) {
+            if (enableGoldTicketTask.getValue()) {
                 goldTicket();
             }
             if (enableGameCenter.getValue()) {
@@ -734,43 +749,53 @@ public class AntMember extends ModelTask {
     
     private void goldTicket() {
         try {
-            boolean doSignIn = enableGoldTicket.getValue();
+            boolean doSignIn = enableGoldTicketSign.getValue();
+            boolean doTask = enableGoldTicketBrowse.getValue();
             boolean doConsume = enableGoldTicketConsume.getValue();
-            if (!doSignIn && !doConsume) {
+            if (!doSignIn && !doTask && !doConsume) {
                 return;
             }
+            // 收取随签到：待收的票是签到等行为攒下的，归在「签到」这一路
+            boolean needCollect = doSignIn && !Status.hasFlagToday("goldTicket::collect");
             boolean needSignIn = doSignIn && !Status.hasFlagToday("goldTicket::sign");
-            boolean needHomeCheck = doSignIn && !Status.hasFlagToday("goldTicket::home");
-            boolean needWelfare = doSignIn && !Status.hasFlagToday("goldTicket::welfare");
+            boolean needHomeCheck = doTask && !Status.hasFlagToday("goldTicket::home");
+            boolean needWelfare = doTask && !Status.hasFlagToday("goldTicket::welfare");
             boolean needConsume = doConsume && !Status.hasFlagToday("goldTicket::consume");
-            if (!needSignIn && !needHomeCheck && !needWelfare && !needConsume) {
+            if (!needCollect && !needSignIn && !needHomeCheck && !needWelfare && !needConsume) {
                 Log.i("黄金票🙈[今日已处理，跳过]");
                 return;
             }
             Log.i("黄金票🙈[开始执行]");
+            // 先把预置黑名单落进字段值：任务处理是在循环里读该字段的，晚一步就会先发请求再拉黑
+            syncGoldTicketCandidates(null);
             JSONObject home = null;
-            if (needSignIn || needHomeCheck) {
+            if (needCollect || needSignIn || needHomeCheck) {
                 home = queryGoldTicketHome();
             }
-            if (needSignIn) {
+            if (needCollect || needSignIn) {
                 if (home == null) {
-                    Log.error("黄金票🙈[首页查询失败]无法判断签到状态");
-                } else if (doGoldTicketSignIn(home)) {
-                    Status.flagToday("goldTicket::sign");
-                }
-            }
-            if (needHomeCheck) {
-                if (home == null) {
-                    Log.error("黄金票🙈[首页查询失败]跳过收取与任务扫描");
+                    Log.error("黄金票🙈[首页查询失败]跳过签到与收取");
                 } else {
-                    doGoldTicketCollect(home);
-                    if (handleGoldTicketHomeTasks(home)) {
-                        Status.flagToday("goldTicket::home");
+                    if (needCollect) {
+                        doGoldTicketCollect(home);
+                        Status.flagToday("goldTicket::collect");
+                    }
+                    if (needSignIn && doGoldTicketSignIn(home)) {
+                        Status.flagToday("goldTicket::sign");
                     }
                 }
             }
+            // 首页与福利中心的任务列表有重叠，本轮已提交过的任务名记在这里，避免重复提交
+            Set<String> handledTitles = new HashSet<>();
+            if (needHomeCheck) {
+                if (home == null) {
+                    Log.error("黄金票🙈[首页查询失败]跳过任务扫描");
+                } else if (handleGoldTicketHomeTasks(home, handledTitles)) {
+                    Status.flagToday("goldTicket::home");
+                }
+            }
             if (needWelfare) {
-                if (handleGoldTicketWelfareTasks()) {
+                if (handleGoldTicketWelfareTasks(handledTitles)) {
                     Status.flagToday("goldTicket::welfare");
                 }
             }
@@ -979,6 +1004,29 @@ public class AntMember extends ModelTask {
         }
     }
 
+    private String goldTicketPushLastResponse;
+
+    /**
+     * 汇总黄金票任务黑名单：预置候选（任务名/标题）+ 字段值集合，返回并集。
+     * <p>供 goldTicket() 开头调用（null 表示仅同步不新增），以及任务处理中
+     * 按真实标题动态拉黑（把新标题并入字段值）。
+     */
+    private Set<String> syncGoldTicketCandidates(Set<String> blackList) {
+        Set<String> merged = new HashSet<>();
+        if (blackList != null) {
+            merged.addAll(blackList);
+        }
+        if (!AutoGoldTicketTaskList.getValue()) {
+            return merged;
+        }
+        // 预置候选：这些任务多需真实付款/浏览，且暂无法自动闭环，故默认拉黑，用户可手动移除
+        merged.addAll(MessageUtil.presetBlackList("AntMember", "GoldTicketTaskList"));
+        merged.addAll(GoldTicketTaskList.getValue());
+        GoldTicketTaskList.setValue(new LinkedHashSet<>(merged));
+        GoldTicketTaskList.saveValue();
+        return merged;
+    }
+
     private boolean isGoldTicketRewardReady(String status) {
         return "TO_RECEIVE".equals(status) || "WAIT_RECEIVE".equals(status)
                 || "FINISHED".equals(status) || "COMPLETE".equals(status);
@@ -986,13 +1034,6 @@ public class AntMember extends ModelTask {
 
     private boolean isGoldTicketSignupRequired(String status) {
         return "NONE_SIGNUP".equals(status) || "SIGNUP_EXPIRED".equals(status);
-    }
-
-    private boolean isGoldTicketKnownAutoTask(JSONObject task) {
-        String taskId = task.optString("taskId");
-        return "AP10247402".equals(taskId) || "AP11249033".equals(taskId)
-                || "AP13250426".equals(taskId) || "AP19360380".equals(taskId)
-                || "AP15280470".equals(taskId) || "AP16338809".equals(taskId);
     }
 
     private JSONArray extractGoldTicketHomeTodoTasks(JSONObject home) {
@@ -1050,6 +1091,7 @@ public class AntMember extends ModelTask {
     private boolean pushGoldTicketTask(String taskId, String action) {
         try {
             String response = AntMemberRpcCall.taskQueryPush(taskId);
+            goldTicketPushLastResponse = response;
             if (response == null || response.isEmpty()) {
                 return false;
             }
@@ -1067,6 +1109,40 @@ public class AntMember extends ModelTask {
         }
     }
 
+    /**
+     * 从 push 响应的原始文本里抠任务标题：push 接口不回传标题，标题在响应中多以
+     * {@code "taskName":"xxx"} 形式出现；抠不到就用 taskId 兜底。
+     */
+    private String parseGoldTicket(String taskId) {
+        String res = goldTicketPushLastResponse;
+        if (res != null && !res.isEmpty()) {
+            String key = "\"taskName\":\"";
+            int idx = res.indexOf(key);
+            if (idx >= 0) {
+                int start = idx + key.length();
+                int end = res.indexOf('"', start);
+                if (end > start) {
+                    return res.substring(start, end);
+                }
+            }
+        }
+        return taskId;
+    }
+
+    /**
+     * 把任务标题并入黄金票黑名单（含字段值与预置候选），并落盘。
+     */
+    private void markGoldTicketBlackList(String taskId) {
+        if (!AutoGoldTicketTaskList.getValue()) {
+            return;
+        }
+        String title = parseGoldTicket(taskId);
+        Set<String> blackList = GoldTicketTaskList.getValue();
+        blackList.add(title);
+        syncGoldTicketCandidates(blackList);
+        Log.other("黄金票🙈[自动拉黑]#" + title);
+    }
+
     private int countGoldTicketPendingAutoTasks(JSONArray todo) {
         if (todo == null || todo.length() == 0) {
             return 0;
@@ -1077,7 +1153,8 @@ public class AntMember extends ModelTask {
             if (task == null) {
                 continue;
             }
-            if (isGoldTicketKnownAutoTask(task)) {
+            String taskId = task.optString("taskId");
+            if (GoldTicketTaskList.getValue().contains(task.optString("title", taskId))) {
                 pending++;
             }
         }
@@ -1086,9 +1163,10 @@ public class AntMember extends ModelTask {
 
     /**
      * 处理黄金票任务列表（首页 / 福利中心共用）。
-     * 仅放开已确认可自动闭环的已知 taskId，避免误判未知任务。
+     * 任务按需做：可自动闭环的直接做；已知需真实付款/浏览的做不了，按标题拉黑并跳过。
+     * 首页与福利中心任务有重叠，title 已做过的本轮不再重复提交。
      */
-    private int processGoldTicketTasks(JSONArray todo, String source) {
+    private int processGoldTicketTasks(JSONArray todo, String source, Set<String> handledTitles) {
         if (todo == null || todo.length() == 0) {
             return 0;
         }
@@ -1098,15 +1176,19 @@ public class AntMember extends ModelTask {
             if (task == null) {
                 continue;
             }
-            if (!isGoldTicketKnownAutoTask(task)) {
-                continue;
-            }
             String taskId = task.optString("taskId");
             String title = task.optString("title", taskId);
             String status = task.optString("taskProcessStatus");
+            if (GoldTicketTaskList.getValue().contains(title)) {
+                continue;
+            }
+            if (handledTitles.contains(title)) {
+                continue;
+            }
             if (isGoldTicketRewardReady(status)) {
                 if (pushGoldTicketTask(taskId, "receive")) {
                     Log.other("黄金票🙈[" + source + "任务领取成功]#" + title);
+                    handledTitles.add(title);
                 } else {
                     pending++;
                 }
@@ -1118,6 +1200,7 @@ public class AntMember extends ModelTask {
                             Log.other("黄金票🙈[" + source + "任务报名成功]#" + title);
                             if (pushGoldTicketTask(taskId, "send")) {
                                 Log.other("黄金票🙈[" + source + "任务完成]#" + title);
+                                handledTitles.add(title);
                             } else {
                                 pending++;
                             }
@@ -1131,27 +1214,22 @@ public class AntMember extends ModelTask {
                 } else {
                     pending++;
                 }
-            } else if ("SIGNUP_COMPLETE".equals(status)) {
-                if (pushGoldTicketTask(taskId, "send")) {
-                    Log.other("黄金票🙈[" + source + "任务完成]#" + title);
-                } else {
-                    pending++;
-                }
             } else {
-                if (pushGoldTicketTask(taskId, "send")) {
-                    Log.other("黄金票🙈[" + source + "任务完成]#" + title);
+                // 不可自动闭环：回报失败或 status 未知（多为需真实付款/浏览），拉黑跳过
+                if (!pushGoldTicketTask(taskId, "send")) {
+                    markGoldTicketBlackList(taskId);
                 } else {
-                    pending++;
+                    handledTitles.add(title);
                 }
             }
         }
         return pending;
     }
 
-    private boolean handleGoldTicketHomeTasks(JSONObject home) {
+    private boolean handleGoldTicketHomeTasks(JSONObject home, Set<String> handledTitles) {
         try {
             JSONArray todo = extractGoldTicketHomeTodoTasks(home);
-            processGoldTicketTasks(todo, "首页");
+            processGoldTicketTasks(todo, "首页", handledTitles);
             JSONObject refreshed = queryGoldTicketHome();
             if (refreshed == null) {
                 Log.other("黄金票🙈[首页任务复查失败]暂不写入今日完成");
@@ -1168,14 +1246,14 @@ public class AntMember extends ModelTask {
         }
     }
 
-    private boolean handleGoldTicketWelfareTasks() {
+    private boolean handleGoldTicketWelfareTasks(Set<String> handledTitles) {
         try {
             JSONArray todo = queryGoldTicketWelfareTodoTasks();
             if (todo == null) {
                 Log.error("黄金票🙈[福利中心任务查询失败]");
                 return false;
             }
-            processGoldTicketTasks(todo, "福利中心");
+            processGoldTicketTasks(todo, "福利中心", handledTitles);
             JSONArray refreshed = queryGoldTicketWelfareTodoTasks();
             if (refreshed == null) {
                 Log.other("黄金票🙈[福利中心任务复查失败]暂不写入今日完成");
@@ -2410,6 +2488,12 @@ public class AntMember extends ModelTask {
                 String taskCode = taskMaterial.optString("taskCode", "");
                 // 根据 taskCode 执行不同的操作
                 if ("WELFARE_PLUS_ANT_FOREST".equals(taskCode) || "WELFARE_PLUS_ANT_OCEAN".equals(taskCode)) {
+                    // 福利加任务每日只做一次：服务端在完成后仍把该条目留在列表里（状态不翻），
+                    // 不做标记会每轮重复调用触发与领奖接口
+                    String welfareFlag = "AntMember::welfarePlus::" + taskCode;
+                    if (Status.hasFlagToday(welfareFlag)) {
+                        continue;
+                    }
                     if ("WELFARE_PLUS_ANT_FOREST".equals(taskCode)) {
                         String forestTaskResponse = AntMemberRpcCall.forestTask();
                         TimeUtil.sleep(500);
@@ -2421,6 +2505,7 @@ public class AntMember extends ModelTask {
                         TimeUtil.sleep(500);
                         String oceanreceiveTaskAward = AntMemberRpcCall.oceanreceiveTaskAward();
                     }
+                    Status.flagToday(welfareFlag);
                     if (taskBaseInfo != null) {
                         String appletName = taskBaseInfo.optString("appletName", "Unknown Applet");
                         Log.other("我的快递💌完成[" + appletName + "]");

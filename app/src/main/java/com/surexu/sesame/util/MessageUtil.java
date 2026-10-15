@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -304,6 +305,36 @@ public class MessageUtil {
         BLACKLIST_LIST_TARGETS.put("MemberCreditSesameTaskList", new String[]{"AntMember", "会员芝麻信用任务芝麻粒"});
         BLACKLIST_LIST_TARGETS.put("OrchardChouChouLeTaskList", new String[]{"AntOrchard", "农场抽抽乐任务"});
         BLACKLIST_LIST_TARGETS.put("WelfareFundTaskList", new String[]{"AntMember", "福利金任务"});
+        BLACKLIST_LIST_TARGETS.put("GoldTicketTaskList", new String[]{"AntMember", "黄金票任务"});
+    }
+
+    /**
+     * 预置拉黑候选：键为 {@code 模块名|列表字段名}。
+     * <p>本地其余模块的预置黑名单仍由各模块 init 直接注入（见各模块 {@code blackList.add(...)}），
+     * 此表仅登记无法走模块 init 注入的黄金票任务（新功能，由
+     * {@code AntMember.syncGoldTicketCandidates} 读取）。
+     */
+    private static final Map<String, Set<String>> PRESET_BLACKLIST = new LinkedHashMap<>();
+
+    static {
+        // 跳外部 App 的"真行为"任务：模块无法完成，且提交时服务端直接回 1009 风控
+        // （1009 会连累全部模块，只读查询也被拦），故直接预置拉黑
+        PRESET_BLACKLIST.put("AntMember|GoldTicketTaskList", setOf(
+                "为自己攒笔钱", "去体验余额宝自动攒", "设置股票快捷入口"));
+    }
+
+    private static Set<String> setOf(String... items) {
+        Set<String> set = new LinkedHashSet<>();
+        for (String item : items) {
+            set.add(item);
+        }
+        return set;
+    }
+
+    /** 取某模块某列表的预置拉黑候选；未登记返回空集（新建副本，调用方可安全修改）。 */
+    public static Set<String> presetBlackList(String module, String listTitle) {
+        Set<String> preset = PRESET_BLACKLIST.get(module + "|" + listTitle);
+        return preset == null ? new LinkedHashSet<>() : new LinkedHashSet<>(preset);
     }
 
     /**
@@ -334,7 +365,54 @@ public class MessageUtil {
         return BLACKLIST_LIST_TARGETS.get(listField);
     }
 
+    /**
+     * 延迟拉黑缓冲：非 null 时，本线程的自动拉黑先入缓冲，由调用方在**任务列表核对之后**决定落盘/丢弃
+     * （列表确认已完成则不该拉黑）。供 {@link com.surexu.sesame.data.task.TaskAttemptPolicy} 使用。
+     */
+    private static final ThreadLocal<List<Runnable>> DEFER_BLACKLIST = new ThreadLocal<>();
+
+    /** 开始捕获本线程的自动拉黑（缓冲已存在时不覆盖，避免嵌套时丢失外层）。 */
+    public static void beginDeferBlackList() {
+        if (DEFER_BLACKLIST.get() == null) {
+            DEFER_BLACKLIST.set(new ArrayList<>());
+        }
+    }
+
+    /** 结束捕获：{@code commit=true} 落盘缓冲中的拉黑，否则丢弃；无论如何都清空本线程缓冲。 */
+    public static void endDeferBlackList(boolean commit) {
+        List<Runnable> pending = DEFER_BLACKLIST.get();
+        DEFER_BLACKLIST.remove();
+        if (pending == null || !commit) {
+            return;
+        }
+        for (Runnable action : pending) {
+            try {
+                action.run();
+            } catch (Throwable t) {
+                Log.err(TAG, "endDeferBlackList err:", t);
+            }
+        }
+    }
+
+    /** 处于延迟模式则把动作入缓冲并返回 true；否则返回 false（调用方应立即执行）。 */
+    private static boolean deferBlackList(Runnable action) {
+        List<Runnable> pending = DEFER_BLACKLIST.get();
+        if (pending == null) {
+            return false;
+        }
+        pending.add(action);
+        return true;
+    }
+
     public static void checkResultCodeAndMarkTaskBlackList(String listTitle, String taskTitle, JSONObject jo) {
+        // 开启延迟拉黑时先入缓冲：只有任务列表未确认完成时才真正落盘
+        if (deferBlackList(() -> doCheckResultCodeAndMarkTaskBlackList(listTitle, taskTitle, jo))) {
+            return;
+        }
+        doCheckResultCodeAndMarkTaskBlackList(listTitle, taskTitle, jo);
+    }
+
+    private static void doCheckResultCodeAndMarkTaskBlackList(String listTitle, String taskTitle, JSONObject jo) {
         try {
             if (jo == null) {
                 Log.i(listTitle, "JSON对象为空");
@@ -456,6 +534,14 @@ public class MessageUtil {
     }
 
     public static void MarkTaskBlackList(String ModelFieldsType, String listTitle, String TaskListName, String taskTitle) {
+        // 开启延迟拉黑时先入缓冲：只有任务列表未确认完成时才真正落盘
+        if (deferBlackList(() -> doMarkTaskBlackList(ModelFieldsType, listTitle, TaskListName, taskTitle))) {
+            return;
+        }
+        doMarkTaskBlackList(ModelFieldsType, listTitle, TaskListName, taskTitle);
+    }
+
+    private static void doMarkTaskBlackList(String ModelFieldsType, String listTitle, String TaskListName, String taskTitle) {
         ConfigV2 config = ConfigV2.INSTANCE;
         ModelFields TaskModelFields = config.getModelFieldsMap().get(ModelFieldsType);
         SelectModelField TaskSelectModelField = (SelectModelField) TaskModelFields.get(listTitle);
@@ -487,6 +573,14 @@ public class MessageUtil {
      * 绝不进入超期自动解禁重试生命周期。
      */
     public static void MarkTaskBlackListPermanent(String ModelFieldsType, String listTitle, String TaskListName, String taskTitle) {
+        // 开启延迟拉黑时先入缓冲：只有任务列表未确认完成时才真正落盘
+        if (deferBlackList(() -> doMarkTaskBlackListPermanent(ModelFieldsType, listTitle, TaskListName, taskTitle))) {
+            return;
+        }
+        doMarkTaskBlackListPermanent(ModelFieldsType, listTitle, TaskListName, taskTitle);
+    }
+
+    private static void doMarkTaskBlackListPermanent(String ModelFieldsType, String listTitle, String TaskListName, String taskTitle) {
         ConfigV2 config = ConfigV2.INSTANCE;
         ModelFields TaskModelFields = config.getModelFieldsMap().get(ModelFieldsType);
         SelectModelField TaskSelectModelField = (SelectModelField) TaskModelFields.get(listTitle);

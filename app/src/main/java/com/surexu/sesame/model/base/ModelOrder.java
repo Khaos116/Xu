@@ -7,6 +7,7 @@ import com.surexu.sesame.data.Model;
 import com.surexu.sesame.model.extensions.ExtensionsHandle;
 import com.surexu.sesame.model.normal.answerAI.AnswerAI;
 import com.surexu.sesame.model.normal.base.BaseModel;
+import com.surexu.sesame.model.task.ancientTree.AncientTree;
 import com.surexu.sesame.model.task.antAnimalGuess.AntAnimalGuess;
 import com.surexu.sesame.model.task.plantingFlowers.PlantingFlowers;
 import com.surexu.sesame.model.task.antDodo.AntDodo;
@@ -22,7 +23,6 @@ import com.surexu.sesame.model.task.dailyCash.DailyCash;
 import com.surexu.sesame.model.task.dayDaySave.DayDaySave;
 import com.surexu.sesame.model.task.greenFinance.GreenFinance;
 import com.surexu.sesame.model.task.goldenbeans.goldenbeans;
-import com.surexu.sesame.model.task.friendManage.FriendManage;
 import com.surexu.sesame.model.task.healthIslandRewards.HealthIslandRewards;
 import com.surexu.sesame.model.task.localTheme.LocalTheme;
 import com.surexu.sesame.model.task.luckCard.LuckCardStatus;
@@ -41,6 +41,7 @@ public class ModelOrder {
     static {
         clazzList.add(BaseModel.class);
         clazzList.add(AntForestV2.class);
+        clazzList.add(AncientTree.class);
         clazzList.add(AntFarm.class);
         clazzList.add(AntStall.class);
         clazzList.add(AntOrchard.class);

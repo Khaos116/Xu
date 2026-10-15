@@ -60,6 +60,8 @@ public final class TaskAlternative {
             "kuaidi", "huishou",
             // 酒店
             "jiudian",
+            // 捐款：需真实付款，伪申报会被判风险操作
+            "juankuan",
     };
 
     /** 英文短词：两侧不得紧邻字母（数字/下划线/连字符/首尾都算边界）。 */
@@ -93,6 +95,33 @@ public final class TaskAlternative {
         return key.contains("game_cz") || CZ_AMOUNT.matcher(key).find();
     }
 
+    /**
+     * 硬交易/履约判据：明确的付款/下单/充值/缴费/还款/履约/租赁/出行/游戏充值。
+     * 这类任务只能靠真实交易完成，伪申报会被服务端判风险操作（回 1009），**一律不发、永久拉黑**。
+     *
+     * <p>与 {@link #isTransactionTask} 的区别：软判据 {@link #CZ_AMOUNT}（{@code _cz} 后跟数字）
+     * 只是"疑似充值"，限定活动实测部分可通过伪申报完成，故放行尝试；硬判据保持绝对拦截。
+     */
+    public static boolean isTransactionTaskHard(String bizKey) {
+        if (bizKey == null || bizKey.isEmpty()) {
+            return false;
+        }
+        String key = bizKey.toLowerCase();
+        for (String keyword : LONG_KEYWORDS) {
+            if (key.contains(keyword)) {
+                return true;
+            }
+        }
+        for (String keyword : SHORT_KEYWORDS) {
+            // 两侧不得紧邻字母：避免 pay/charge/dache 等短词被任意编码串夹带误命中
+            if (Pattern.compile("(?<![a-z])" + keyword + "(?![a-z])").matcher(key).find()) {
+                return true;
+            }
+        }
+        // 游戏内充值：game_cz 明确（裸 _cz 数字为软判据，见 isTransactionTask）
+        return key.contains("game_cz");
+    }
+
     /** 日志出口（{@code Log.farm/forest/other/goldenBeans}）。 */
     public interface LogSink {
         void log(String message);
@@ -124,7 +153,9 @@ public final class TaskAlternative {
 
     /** 唯一的 doFarmTask payload，返回原始响应。 */
     public static String request(String bizKey, String taskSceneCode, String version) {
-        if (isTransactionTask(bizKey)) {
+        // 硬交易/履约类（付款/下单/充值/缴费等）绝不伪申报；软判据（_cz 数字等疑似充值）放行尝试，
+        // 失败/风控由 TaskAttemptPolicy 的自动黑名单兜底。
+        if (isTransactionTaskHard(bizKey)) {
             Log.i("⏭️跳过交易/履约类任务#bizKey=" + bizKey + "，不自动申报");
             return "{}";
         }
