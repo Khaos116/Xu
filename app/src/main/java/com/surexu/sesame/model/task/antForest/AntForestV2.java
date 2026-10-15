@@ -2567,7 +2567,7 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
                     Outcome outcome = TaskAttemptPolicy.handle("forest::" + sceneCode + "/" + taskType, taskTitle, null,
                             () -> attemptFinishTask(sceneCode, taskType, taskTitle), Log::forest,
                             new TaskAttemptPolicy.Site("AntForestVitalityTaskList", "森林任务", taskType, sceneCode,
-                                    (k) -> probeForestVitalityStatus(sceneCode, taskType)));
+                                    (TaskAttemptPolicy.StatusProbe) (k) -> probeForestVitalityStatus(sceneCode, taskType)));
                     doubleCheck = outcome == Outcome.DONE || outcome == Outcome.TRIGGERED;
                 }
             }
@@ -3239,7 +3239,7 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
                                         : attemptFinishTask(sceneCode, taskType, label), Log::forest,
                                 new TaskAttemptPolicy.Site("AntForestVitalityTaskList", "森林乐园限定任务",
                                         taskType, sceneCode, TaskAlternative.DEFAULT_VERSION, null,
-                                        (k) -> probeOptionalPlayExhausted(sceneCode, taskType)));
+                                        (TaskAttemptPolicy.ExhaustedProbe) (k) -> probeOptionalPlayExhausted(sceneCode, taskType)));
                         // 被当日标记挡下（已试过）不算推进，否则每轮都白转一遍
                         if (outcome != Outcome.TRIED_TODAY && outcome != Outcome.SKIPPED) {
                             progressed = true;

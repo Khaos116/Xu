@@ -352,8 +352,8 @@ public class AntOrchard extends ModelTask {
                                 () -> attemptFinishOptionalPlayTask(sceneCode, taskType, label), Log::farm,
                                 new TaskAttemptPolicy.Site("AntOrchardTaskList", "农场乐园限定任务",
                                         taskType, sceneCode, TaskAlternative.DEFAULT_VERSION, null,
-                                        (k) -> probeOrchardOptionalPlayStatus(sceneCode, taskType),
-                                        (k) -> probeOrchardOptionalPlayExhausted(sceneCode, taskType)));
+                                        (TaskAttemptPolicy.StatusProbe) (k) -> probeOrchardOptionalPlayStatus(sceneCode, taskType),
+                                        (TaskAttemptPolicy.ExhaustedProbe) (k) -> probeOrchardOptionalPlayExhausted(sceneCode, taskType)));
                         // 被当日标记挡下（已试过）不算推进，否则每轮都白转一遍
                         if (outcome != Outcome.TRIED_TODAY && outcome != Outcome.SKIPPED) {
                             progressed = true;
@@ -601,7 +601,7 @@ public class AntOrchard extends ModelTask {
                                     () -> attemptChouChouLeFinish(taskSceneCode, taskType, taskName), Log::farm,
                                     new TaskAttemptPolicy.Site("OrchardChouChouLeTaskList", "农场抽抽乐",
                                             taskType, taskSceneCode,
-                                            (k) -> probeOrchardChouChouLeStatus(sceneCode, taskSceneCode, taskType)));
+                                            (TaskAttemptPolicy.StatusProbe) (k) -> probeOrchardChouChouLeStatus(sceneCode, taskSceneCode, taskType)));
                             if (outcome == Outcome.DONE || outcome == Outcome.TRIGGERED
                                     || outcome == Outcome.AWARDED) {
                                 doublecheck = true;

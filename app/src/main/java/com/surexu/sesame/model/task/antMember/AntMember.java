@@ -1023,7 +1023,6 @@ public class AntMember extends ModelTask {
         merged.addAll(MessageUtil.presetBlackList("AntMember", "GoldTicketTaskList"));
         merged.addAll(GoldTicketTaskList.getValue());
         GoldTicketTaskList.setValue(new LinkedHashSet<>(merged));
-        GoldTicketTaskList.saveValue();
         return merged;
     }
 

@@ -199,7 +199,7 @@ public class ForestChouChouLe {
                                         Log::forest,
                                         new TaskAttemptPolicy.Site("AntForestHuntTaskList", "森林寻宝",
                                                 taskType, taskSceneCode, TaskAlternative.DEFAULT_VERSION, null,
-                                                (k) -> rightsTimes >= rightsTimesLimit));
+                                                (TaskAttemptPolicy.ExhaustedProbe) (k) -> rightsTimes >= rightsTimesLimit));
                                 if (exchangeOutcome != Outcome.DONE && exchangeOutcome != Outcome.TRIGGERED
                                         && exchangeOutcome != Outcome.AWARDED) {
                                     break; // 做不了就收手，不再空转剩余次数

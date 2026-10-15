@@ -125,6 +125,7 @@ public class AntFarm extends ModelTask {
     private SelectAndCountModelField gameCenterBuyMallItemList;
     private BooleanModelField kitchen;
     private BooleanModelField useSpecialFood;
+    private IntegerModelField useSpecialFoodCountLimit;
     private BooleanModelField useNewEggTool;
     private BooleanModelField harvestProduce;
     private ChoiceModelField donationType;
@@ -174,6 +175,7 @@ public class AntFarm extends ModelTask {
         modelFields.addField(useAccelerateToolOptions = new SelectModelField("useAccelerateToolOptions", "加速卡 | 选项", new LinkedHashSet<>(), CustomOption::getUseAccelerateToolOptions).setDependsOn("useAccelerateTool"));
         modelFields.addField(useBigEaterTool = new BooleanModelField("useBigEaterTool", "加饭卡 | 使用", false));
         modelFields.addField(useSpecialFood = new BooleanModelField("useSpecialFood", "特殊食品 | 使用", false));
+        modelFields.addField(useSpecialFoodCountLimit = new IntegerModelField("useSpecialFoodCountLimit", "特殊食品 | " + "使用上限(无限:0)", 0).setDependsOn("useSpecialFood"));
         modelFields.addField(rewardFriend = new BooleanModelField("rewardFriend", "打赏好友", false));
         modelFields.addField(recallAnimalType = new ChoiceModelField("recallAnimalType", "召回小鸡", RecallAnimalType.ALWAYS, RecallAnimalType.nickNames));
         modelFields.addField(feedAnimal = new BooleanModelField("feedAnimal", "投喂小鸡", false));
@@ -2676,8 +2678,8 @@ public class AntFarm extends ModelTask {
                                         : attemptOptionalPlayTask(sceneCode, taskType, label), Log::farm,
                                 new TaskAttemptPolicy.Site("AntFarmDrawMachineTaskList", "庄园乐园限定任务",
                                         taskType, sceneCode, TaskAlternative.DEFAULT_VERSION, null,
-                                        (k) -> probeOptionalPlayStatus(sceneCode, taskType),
-                                        (k) -> probeOptionalPlayExhausted(sceneCode, taskType),
+                                        (TaskAttemptPolicy.StatusProbe) (k) -> probeOptionalPlayStatus(sceneCode, taskType),
+                                        (TaskAttemptPolicy.ExhaustedProbe) (k) -> probeOptionalPlayExhausted(sceneCode, taskType),
                                         unwrapTask));
                         // 被当日标记挡下（已试过）不算推进，否则每轮都白转一遍
                         if (outcome != Outcome.TRIED_TODAY && outcome != Outcome.SKIPPED) {
@@ -3110,7 +3112,7 @@ public class AntFarm extends ModelTask {
                     int remain = rightsTimesLimit - rightsTimes;
                     // 本日已做成：不再重复上报（省一轮全量重做）。但**多次任务**还有剩余次数时不能跳过，
                     // 否则当天只做成第一次就卡住、永远推不满。
-                    if (remain <= 0 && TaskAlternative.verifiedToday(taskId)) {
+                    if (remain <= 0 && TaskAlternative.isVerifiedToday(taskId)) {
                         continue;
                     }
                     boolean matched = false;

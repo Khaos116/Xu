@@ -611,11 +611,14 @@ public class Status {
         if (task == null) {
             return false;
         }
-        int countLimit = task.getUseSpecialFoodCountLimit().getValue();
-        if (countLimit == 0) {
-            return true;
+        // 特殊食品使用上限(无限:0)，0 表示不限制；字段缺失时视为不可用，避免 NPE。
+        // AntFarm 字段无 Lombok getter，按项目惯例走 ModelFields 读取
+        ModelField<?> limitField = task.getFields().get("useSpecialFoodCountLimit");
+        if (limitField == null || limitField.getValue() == null) {
+            return false;
         }
-        return INSTANCE.useSpecialFoodCount < countLimit;
+        int limit = ((Number) limitField.getValue()).intValue();
+        return limit == 0 || INSTANCE.useSpecialFoodCount < limit;
     }
     
     public static synchronized void useSpecialFoodToday() {
