@@ -203,12 +203,23 @@ public class AntOcean extends ModelTask {
                 JSONObject jo = new JSONObject(AntOceanRpcCall.queryTaskList());
                 if (MessageUtil.checkResultCode(TAG, jo)) {
 
-                    JSONArray ja = jo.getJSONArray("antOceanTaskVOList");
-                    for (int i = 0; i < ja.length(); i++) {
-                        jo = ja.getJSONObject(i);
-                        JSONObject bizInfo = new JSONObject(jo.getString("bizInfo"));
-                        String taskTitle = bizInfo.optString("taskTitle");
-                        AntOceanAntiepTaskListMap.add(taskTitle, taskTitle);
+                    JSONArray ja = jo.optJSONArray("antOceanTaskVOList");
+                    if (ja != null) {
+                        for (int i = 0; i < ja.length(); i++) {
+                            jo = ja.optJSONObject(i);
+                            if (jo == null) {
+                                continue;
+                            }
+                            String bizInfoStr = jo.optString("bizInfo", "");
+                            if (bizInfoStr.isEmpty()) {
+                                continue;
+                            }
+                            JSONObject bizInfo = new JSONObject(bizInfoStr);
+                            String taskTitle = bizInfo.optString("taskTitle", "");
+                            if (!taskTitle.isEmpty()) {
+                                AntOceanAntiepTaskListMap.add(taskTitle, taskTitle);
+                            }
+                        }
                     }
                 }
                 //保存任务到配置文件
@@ -286,7 +297,12 @@ public class AntOcean extends ModelTask {
 
     private void queryHomePage() {
         try {
-            JSONObject joHomePage = new JSONObject(AntOceanRpcCall.queryHomePage());
+            String homePage = AntOceanRpcCall.queryHomePage();
+            if (StringUtil.isEmpty(homePage)) {
+                Log.record(TAG + "queryHomePage返回为空");
+                return;
+            }
+            JSONObject joHomePage = new JSONObject(homePage);
             if (!MessageUtil.checkResultCode(TAG, joHomePage)) {
                 return;
             }
@@ -295,9 +311,15 @@ public class AntOcean extends ModelTask {
                 collectEnergy(joHomePage.getJSONArray("bubbleVOList"));
             }
 
-            JSONObject userInfoVO = joHomePage.getJSONObject("userInfoVO");
+            JSONObject userInfoVO = joHomePage.optJSONObject("userInfoVO");
+            if (userInfoVO == null) {
+                return;
+            }
             int rubbishNumber = userInfoVO.optInt("rubbishNumber", 0);
-            String userId = userInfoVO.getString("userId");
+            String userId = userInfoVO.optString("userId", "");
+            if (userId.isEmpty()) {
+                return;
+            }
             cleanOcean(userId, rubbishNumber);
 
             JSONObject ipVO = userInfoVO.optJSONObject("ipVO");
@@ -351,8 +373,10 @@ public class AntOcean extends ModelTask {
             for (int i = 0; i < rubbishNumber; i++) {
                 JSONObject jo = new JSONObject(AntOceanRpcCall.cleanOcean(userId));
                 if (MessageUtil.checkResultCode(TAG, jo)) {
-                    JSONArray cleanRewardVOS = jo.getJSONArray("cleanRewardVOS");
-                    checkReward(cleanRewardVOS);
+                    JSONArray cleanRewardVOS = jo.optJSONArray("cleanRewardVOS");
+                    if (cleanRewardVOS != null) {
+                        checkReward(cleanRewardVOS);
+                    }
                     Log.forest("神奇海洋🐳清理[" + UserIdMap.getMaskName(userId) + "]海域");
                 }
             }
@@ -363,12 +387,20 @@ public class AntOcean extends ModelTask {
 
     private void autocleanOcean(String UserId) {
         try {
-            JSONObject joHomePage = new JSONObject(AntOceanRpcCall.queryHomePage());
+            String homePage = AntOceanRpcCall.queryHomePage();
+            if (StringUtil.isEmpty(homePage)) {
+                Log.record(TAG + "queryHomePage返回为空");
+                return;
+            }
+            JSONObject joHomePage = new JSONObject(homePage);
             if (!MessageUtil.checkResultCode(TAG, joHomePage)) {
                 return;
             }
-            JSONObject userInfoVO = joHomePage.getJSONObject("userInfoVO");
-            Long canCleanLaterTime = userInfoVO.getLong("canCleanLaterTime");
+            JSONObject userInfoVO = joHomePage.optJSONObject("userInfoVO");
+            if (userInfoVO == null) {
+                return;
+            }
+            long canCleanLaterTime = userInfoVO.optLong("canCleanLaterTime", 0L);
             long updateTime = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(10);
             addChildTask(new ChildModelTask(UserId, "Ocean", this::queryHomePage, updateTime));
             String taskId = "Ocean|" + UserId;
@@ -385,8 +417,10 @@ public class AntOcean extends ModelTask {
         try {
             JSONObject jo = new JSONObject(AntOceanRpcCall.ipOpenSurprise());
             if (MessageUtil.checkResultCode(TAG, jo)) {
-                JSONArray rewardVOS = jo.getJSONArray("surpriseRewardVOS");
-                checkReward(rewardVOS);
+                JSONArray rewardVOS = jo.optJSONArray("surpriseRewardVOS");
+                if (rewardVOS != null) {
+                    checkReward(rewardVOS);
+                }
             }
         } catch (Throwable t) {
             Log.err(TAG, "ipOpenSurprise err:", t);

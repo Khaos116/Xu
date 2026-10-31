@@ -1764,12 +1764,15 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
     private void collectRobExpandEnergy(String propId, String propType) {
         try {
             JSONObject jo = new JSONObject(AntForestRpcCall.collectRobExpandEnergy(propId, propType));
-            if (MessageUtil.checkResultCode(TAG, jo)) {
+            if ("SUCCESS".equalsIgnoreCase(jo.optString("resultCode"))) {
                 int collectEnergy = jo.optInt("collectEnergy");
                 Log.forest("额外能量🎄收取[" + collectEnergy + "g]");
                 totalCollected += collectEnergy;
                 Statistics.addData(Statistics.DataType.COLLECTED, collectEnergy);
+                return;
             }
+            // 额外能量不足整数部分是服务端正常提示，非异常：按结果类记录，不打原始响应
+            Log.forest("额外能量⏭️" + jo.optString("resultDesc"));
         } catch (Throwable th) {
             Log.err(TAG, "collectRobExpandEnergy err:", th);
         }
@@ -1804,12 +1807,18 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
         try {
             JSONObject jo = new JSONObject(AntForestRpcCall.produceForestEnergy(scene));
             if (MessageUtil.checkResultCode(TAG, jo)) {
-                jo = jo.getJSONObject("data").getJSONObject("response");
-                energyGeneratedList = jo.getJSONArray("energyGeneratedList");
-                if (energyGeneratedList.length() > 0) {
-                    String title = scene.equals("FEEDS") ? "绿色医疗" : "电子小票";
-                    int cumulativeEnergy = jo.getInt("cumulativeEnergy");
-                    Log.forest("医疗健康🧾完成[" + title + "]#产生[" + cumulativeEnergy + "g能量]");
+                JSONObject data = jo.optJSONObject("data");
+                JSONObject response = data == null ? null : data.optJSONObject("response");
+                if (response != null) {
+                    energyGeneratedList = response.optJSONArray("energyGeneratedList");
+                    if (energyGeneratedList == null) {
+                        energyGeneratedList = new JSONArray();
+                    }
+                    if (energyGeneratedList.length() > 0) {
+                        String title = scene.equals("FEEDS") ? "绿色医疗" : "电子小票";
+                        int cumulativeEnergy = response.optInt("cumulativeEnergy", 0);
+                        Log.forest("医疗健康🧾完成[" + title + "]#产生[" + cumulativeEnergy + "g能量]");
+                    }
                 }
             }
         } catch (Throwable th) {
@@ -1983,20 +1992,41 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
             if (ForestHunt) {
                 JSONObject resData = new JSONObject(AntForestRpcCall.enterDrawActivityopengreen("", "ANTFOREST_NORMAL_DRAW", "task_entry"));
                 if (MessageUtil.checkSuccess(TAG, resData)) {
-                    JSONArray drawSceneGroups = resData.getJSONArray("drawSceneGroups");
-                    for (int i = 0; i < drawSceneGroups.length(); i++) {
-                        JSONObject drawScene = drawSceneGroups.getJSONObject(i);
-                        JSONObject drawActivity = drawScene.getJSONObject("drawActivity");
-                        String sceneCode = drawActivity.getString("sceneCode");
+                    JSONArray drawSceneGroups = resData.optJSONArray("drawSceneGroups");
+                    for (int i = 0; drawSceneGroups != null && i < drawSceneGroups.length(); i++) {
+                        JSONObject drawScene = drawSceneGroups.optJSONObject(i);
+                        if (drawScene == null) {
+                            continue;
+                        }
+                        JSONObject drawActivity = drawScene.optJSONObject("drawActivity");
+                        if (drawActivity == null) {
+                            continue;
+                        }
+                        String sceneCode = drawActivity.optString("sceneCode", "");
+                        if (sceneCode.isEmpty()) {
+                            continue;
+                        }
                         JSONObject listTaskopengreen = new JSONObject(AntForestRpcCall.listTaskopengreen(sceneCode + "_TASK", "task_entry"));
                         if (MessageUtil.checkSuccess(TAG, listTaskopengreen)) {
-                            JSONArray taskList = listTaskopengreen.getJSONArray("taskInfoList");
-                            for (int j = 0; j < taskList.length(); j++) {
-                                JSONObject taskInfo = taskList.getJSONObject(j);
-                                JSONObject taskBaseInfo = taskInfo.getJSONObject("taskBaseInfo");
-                                JSONObject bizInfo = new JSONObject(taskBaseInfo.getString("bizInfo"));
-                                String taskName = bizInfo.getString("title");
-                                AntForestHuntTaskListMap.add(taskName, taskName);
+                            JSONArray taskList = listTaskopengreen.optJSONArray("taskInfoList");
+                            for (int j = 0; taskList != null && j < taskList.length(); j++) {
+                                JSONObject taskInfo = taskList.optJSONObject(j);
+                                if (taskInfo == null) {
+                                    continue;
+                                }
+                                JSONObject taskBaseInfo = taskInfo.optJSONObject("taskBaseInfo");
+                                if (taskBaseInfo == null) {
+                                    continue;
+                                }
+                                String bizInfoStr = taskBaseInfo.optString("bizInfo", "");
+                                if (bizInfoStr.isEmpty()) {
+                                    continue;
+                                }
+                                JSONObject bizInfo = new JSONObject(bizInfoStr);
+                                String taskName = bizInfo.optString("title", "");
+                                if (!taskName.isEmpty()) {
+                                    AntForestHuntTaskListMap.add(taskName, taskName);
+                                }
                             }
                         }
                     }
@@ -2142,15 +2172,18 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
 
     private static void sendEnergyByAction(String sourceType) {
         try {
-            // 先问询再发送：服务端不允许时（如当日额度用尽 USER_SEND_OVER_LIMIT）不发请求
+            // 线上逛街每天仅可完成一次：当天已发出或额度用尽后不再问询
+            if (Status.hasFlagToday("forest::greenLifeSendEnergy::" + sourceType)) {
+                return;
+            }
+            // 先问询再发送：服务端不允许时（如当日额度用尽）不发请求
             JSONObject jo = new JSONObject(GreenLifeRpcCall.consultForSendEnergyByAction(sourceType));
             if (!MessageUtil.checkSuccess(TAG, jo)) {
                 return;
             }
             JSONObject data = jo.getJSONObject("data");
             if (!data.optBoolean("canSendEnergy", false)) {
-                Log.i(TAG, "森林集市⏭️[" + sourceType + "]不可发送能量["
-                        + data.optString("resultCode", "") + "]，跳过");
+                Status.flagToday("forest::greenLifeSendEnergy::" + sourceType);
                 return;
             }
             jo = new JSONObject(GreenLifeRpcCall.sendEnergyByAction(sourceType));
@@ -2169,6 +2202,8 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
             if (receivedEnergyAmount > 0) {
                 totalCollected += receivedEnergyAmount;
                 Statistics.addData(Statistics.DataType.COLLECTED, receivedEnergyAmount);
+                // 确认到账后才算当天已完成（线上逛街每天仅可完成一次）
+                Status.flagToday("forest::greenLifeSendEnergy::" + sourceType);
             }
         } catch (Throwable t) {
             Log.err(TAG, "sendEnergyByAction err:", t);
@@ -2184,8 +2219,11 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
             JSONArray forestSignVOList = resData.optJSONArray("forestSignVOList");
             if (forestSignVOList != null) {
                 for (int i = 0; i < forestSignVOList.length(); i++) {
-                    JSONObject forestSignVO = forestSignVOList.getJSONObject(i);
-                    String signId = forestSignVO.getString("signId");
+                    JSONObject forestSignVO = forestSignVOList.optJSONObject(i);
+                    if (forestSignVO == null) {
+                        continue;
+                    }
+                    String signId = forestSignVO.optString("signId");
                     String currentSignKey = forestSignVO.getString("currentSignKey");
                     JSONArray signRecords = forestSignVO.getJSONArray("signRecords");
                     for (int j = 0; j < signRecords.length(); j++) {
@@ -2388,8 +2426,15 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
             if (!MessageUtil.checkResultCode(TAG, jo)) {
                 return;
             }
-            JSONArray forestSignVOList = jo.getJSONArray("forestSignVOList");
-            JSONObject forestSignVO = forestSignVOList.getJSONObject(0);
+            JSONArray forestSignVOList = jo.optJSONArray("forestSignVOList");
+            if (forestSignVOList == null || forestSignVOList.length() == 0) {
+                Log.forest("森林签到⏳[抱歉签到]#任务列表未返回签到项，本次跳过");
+                return;
+            }
+            JSONObject forestSignVO = forestSignVOList.optJSONObject(0);
+            if (forestSignVO == null) {
+                return;
+            }
             String currentSignKey = forestSignVO.getString("currentSignKey"); // 当前签到的 key
             String signId = forestSignVO.getString("signId"); // 签到ID
             String sceneCode = forestSignVO.getString("sceneCode"); // 场景代码
@@ -2918,14 +2963,17 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
                     Log.record("有送能量雨的机会");
                     JSONObject joEnergyRainCanGrantList = new JSONObject(AntForestRpcCall.queryEnergyRainCanGrantList());
                     TimeUtil.sleep(500);
-                    JSONArray grantInfos = joEnergyRainCanGrantList.getJSONArray("grantInfos");
+                    JSONArray grantInfos = joEnergyRainCanGrantList.optJSONArray("grantInfos");
+                    if (grantInfos == null) {
+                        return;
+                    }
                     Set<String> set = giveEnergyRainList.getValue();
                     String userId;
                     boolean granted = false;
                     for (int j = 0; j < grantInfos.length(); j++) {
-                        JSONObject grantInfo = grantInfos.getJSONObject(j);
-                        if (grantInfo.getBoolean("canGrantedStatus")) {
-                            userId = grantInfo.getString("userId");
+                        JSONObject grantInfo = grantInfos.optJSONObject(j);
+                        if (grantInfo != null && grantInfo.optBoolean("canGrantedStatus", false)) {
+                            userId = grantInfo.optString("userId", "");
                             if (set.contains(userId)) {
                                 JSONObject joEnergyRainChance = new JSONObject(AntForestRpcCall.grantEnergyRainChance(userId));
                                 TimeUtil.sleep(500);
@@ -4014,11 +4062,17 @@ public class AntForestV2 extends ModelTask implements EnergyCollectCallback {
                 JSONObject resData = new JSONObject(AntForestRpcCall.queryMyPatrolRecord());
                 TimeUtil.sleep(500);
                 if (resData.optBoolean("canSwitch")) {
-                    JSONArray records = resData.getJSONArray("records");
-                    for (int i = 0; i < records.length(); i++) {
-                        JSONObject record = records.getJSONObject(i);
-                        JSONObject userPatrol = record.getJSONObject("userPatrol");
-                        if (userPatrol.getInt("unreachedNodeCount") > 0) {
+                    JSONArray records = resData.optJSONArray("records");
+                    for (int i = 0; records != null && i < records.length(); i++) {
+                        JSONObject record = records.optJSONObject(i);
+                        if (record == null) {
+                            continue;
+                        }
+                        JSONObject userPatrol = record.optJSONObject("userPatrol");
+                        if (userPatrol == null) {
+                            continue;
+                        }
+                        if (userPatrol.optInt("unreachedNodeCount", 0) > 0) {
                             if ("silent".equals(userPatrol.getString("mode"))) {
                                 JSONObject patrolConfig = record.getJSONObject("patrolConfig");
                                 String patrolId = patrolConfig.getString("patrolId");

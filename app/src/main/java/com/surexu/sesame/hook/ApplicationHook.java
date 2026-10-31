@@ -179,8 +179,50 @@ public class ApplicationHook {
 
     private static volatile boolean broadcastReceiverRegistered = false;
 
+    /** 主进程"模块初始化开始"标记是否已打印（供日志查看器按轮分组，每个主进程加载周期只打一次） */
+    private static volatile boolean initStartLogged = false;
+
     public static void setOffline(boolean offline) {
         ApplicationHook.offline = offline;
+    }
+
+    /** 当前进程名；取不到时回退包名（行为同旧版） */
+    private static String getCurrentProcessName(String fallback) {
+        // 首选 /proc/self/cmdline：不依赖 ActivityThread 是否已完成 attach。
+        // onModuleLoaded 等早期阶段 currentProcessName() 仍为空，会误回退包名，
+        // 导致各子进程被当成主进程（重复初始化 / 加载标记刷屏）
+        try {
+            byte[] buf = new byte[256];
+            int n;
+            try (java.io.FileInputStream in = new java.io.FileInputStream("/proc/self/cmdline")) {
+                n = in.read(buf);
+            }
+            if (n > 0) {
+                int end = 0;
+                while (end < n && buf[end] != 0) {
+                    end++;
+                }
+                if (end > 0) {
+                    String name = new String(buf, 0, end, java.nio.charset.StandardCharsets.UTF_8).trim();
+                    if (!name.isEmpty()) {
+                        return name;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+            // 读取失败时落到 ActivityThread 反射
+        }
+        try {
+            Object processName = Class.forName("android.app.ActivityThread")
+                    .getMethod("currentProcessName").invoke(null);
+            if (processName instanceof String && !((String) processName).isEmpty()) {
+                return (String) processName;
+            }
+            Log.i(TAG, "getCurrentProcessName empty, fallback=" + fallback);
+        } catch (Throwable t) {
+            Log.i(TAG, "getCurrentProcessName failed, fallback=" + fallback);
+        }
+        return fallback;
     }
 
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -189,12 +231,24 @@ public class ApplicationHook {
         // 支付宝子进程(小程序容器/沙箱等)只安装抓包 hook, 不跑模型与任务
         if (ClassUtil.PACKAGE_NAME.equals(lpparam.packageName)
                 && !ClassUtil.PACKAGE_NAME.equals(lpparam.processName)) {
+            // 主进程模块加载起点标记：置于 AppConfig.load 之前，供 App 日志查看器把整个
+            // 加载阶段（hook/CaptchaHook/加载完成等）归到其后一轮执行的开头，而非上一轮末尾。
+            // 仅主进程打印，避免各子进程刷噪声；与 handleLoadPackage 内的兜底打印共用去重标志
+            if (ClassUtil.PACKAGE_NAME.equals(getCurrentProcessName(ClassUtil.PACKAGE_NAME)) && !initStartLogged) {
+                initStartLogged = true;
+                Log.i("模块初始化开始");
+            }
             handleSubProcessLoadPackage(lpparam.classLoader);
             return;
         }
         if (ClassUtil.PACKAGE_NAME.equals(lpparam.packageName) && ClassUtil.PACKAGE_NAME.equals(lpparam.processName)) {
-            if (hooked) {
-                return;
+            // 提前在锁内落标志：onPackageReady 与旧回调 handleLoadPackage 可能并发/重复触发，
+            // 旧写法在方法末尾才置位，竞态下会重复执行整套 hook 与初始化
+            synchronized (ApplicationHook.class) {
+                if (hooked) {
+                    return;
+                }
+                hooked = true;
             }
             classLoader = lpparam.classLoader;
 
@@ -503,8 +557,7 @@ public class ApplicationHook {
             } catch (Throwable t) {
                 Log.err(TAG, "hook MiscUtils err:", t);
             }
-            hooked = true;
-            Log.i(TAG, "load success: " + lpparam.packageName);
+            Log.i(TAG, "load success: " + lpparam.packageName + " proc=" + lpparam.processName + " hooked=" + hooked);
         }
     }
 
@@ -655,7 +708,7 @@ public class ApplicationHook {
 
                 UserIdMap.initUser(userId);
                 Model.initAllModel();
-                Log.record("模块版本：" + modelVersion);
+                // 模块版本只在执行阶段打一次，加载阶段不重复打印（否则启动段同一条出现两次）
                 Log.record("开始加载");
                 ConfigV2.load(userId);
 

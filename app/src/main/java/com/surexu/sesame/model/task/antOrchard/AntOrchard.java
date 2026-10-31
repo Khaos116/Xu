@@ -260,7 +260,7 @@ public class AntOrchard extends ModelTask {
                 }
                 queryOptionalPlay();
             }
-            // 处理回访/浏览奖励：官方每次进农场都会调一次（2026-09-22 抓包实证）；
+            // 处理回访/浏览奖励：官方每次进农场都会调一次；
             // 不再加"每日一次"标记——首调可能在奖励还没产生时就把当天标记掉，反而漏领
             receiveOrchardVisitAward();
 
@@ -722,13 +722,20 @@ public class AntOrchard extends ModelTask {
                 String result = AntOrchardRpcCall.orchardListTask();
                 JSONObject jo = new JSONObject(result);
                 if (MessageUtil.checkResultCode(TAG, jo)) {
-                    JSONArray taskArray = jo.getJSONArray("taskList");
-                    for (int i = 0; i < taskArray.length(); i++) {
-                        jo = taskArray.getJSONObject(i);
-                        JSONObject displayConfig = jo.optJSONObject("taskDisplayConfig");
-                        if (displayConfig.has("title")) {
-                            String title = displayConfig.optString("title");
-                            AntOrchardTaskListMap.add(title, title);
+                    JSONArray taskArray = jo.optJSONArray("taskList");
+                    if (taskArray != null) {
+                        for (int i = 0; i < taskArray.length(); i++) {
+                            jo = taskArray.optJSONObject(i);
+                            if (jo == null) {
+                                continue;
+                            }
+                            JSONObject displayConfig = jo.optJSONObject("taskDisplayConfig");
+                            if (displayConfig != null && displayConfig.has("title")) {
+                                String title = displayConfig.optString("title", "");
+                                if (!title.isEmpty()) {
+                                    AntOrchardTaskListMap.add(title, title);
+                                }
+                            }
                         }
                     }
                 }
@@ -1354,7 +1361,9 @@ public class AntOrchard extends ModelTask {
                     }
                 }
 
-                int timesToDo = (rightsTimesLimit > 0) ? (rightsTimesLimit - rightsTimes) : 1;
+                // 上限 100：rightsTimesLimit 偶尔以肥料额编码，避免循环爆量
+                int timesToDo = (rightsTimesLimit > 0)
+                        ? Math.min(100, Math.max(1, rightsTimesLimit - rightsTimes)) : 1;
                 if (timesToDo <= 0) {
                     return true;
                 }
@@ -1428,7 +1437,7 @@ public class AntOrchard extends ModelTask {
             if (!MessageUtil.isUnsupportedRpc(finishResponse)) {
                 MessageUtil.checkResultCodeAndMarkTaskBlackList("AntOrchardTaskList", taskTitle, finishResponse);
             } else {
-                // doFarmTask 的响应对这类任务**不可信**：实测回 102「服务器正在开小差」但任务其实被做成了
+                // doFarmTask 的响应对这类任务**不可信**：回 102「服务器正在开小差」但任务其实被做成了
                 // （rightsTimes 0→1、状态转 RECEIVED）；也有同样回 102 而真没做成的。
                 // 所以既不能据响应判失败（会把做成的任务拉黑），也不能判成功（真做不了的会每轮白试）：
                 // 记下来，由 handleTaskList 在列表处理完后**按任务列表状态核对**
@@ -1481,10 +1490,16 @@ public class AntOrchard extends ModelTask {
             JSONObject jo = new JSONObject(response);
 
             if (MessageUtil.checkResultCode(TAG, jo)) {
-                JSONArray taskList = jo.getJSONArray("taskList");
+                JSONArray taskList = jo.optJSONArray("taskList");
+                if (taskList == null) {
+                    return;
+                }
                 for (int i = 0; i < taskList.length(); i++) {
-                    JSONObject task = taskList.getJSONObject(i);
-                    if (!"FINISHED".equals(task.getString("taskStatus"))) {
+                    JSONObject task = taskList.optJSONObject(i);
+                    if (task == null) {
+                        continue;
+                    }
+                    if (!"FINISHED".equals(task.optString("taskStatus", ""))) {
                         continue;
                     }
 
@@ -1547,15 +1562,24 @@ public class AntOrchard extends ModelTask {
             String result = AntOrchardRpcCall.drawLottery();
             JSONObject drawJo = new JSONObject(result);
             if (MessageUtil.checkResultCode(TAG, drawJo)) {
-                JSONArray awardArray = drawJo.getJSONObject("lotteryPlusInfo").getJSONObject("userSevenDaysGiftsItem").getJSONArray("userEverydayGiftItems");
+                JSONObject lotteryPlusInfo = drawJo.optJSONObject("lotteryPlusInfo");
+                JSONObject sevenDaysGiftsItem = lotteryPlusInfo == null
+                        ? null : lotteryPlusInfo.optJSONObject("userSevenDaysGiftsItem");
+                JSONArray awardArray = sevenDaysGiftsItem == null
+                        ? null : sevenDaysGiftsItem.optJSONArray("userEverydayGiftItems");
 
-                for (int i = 0; i < awardArray.length(); i++) {
-                    JSONObject award = awardArray.getJSONObject(i);
-                    if (award.getString("itemId").equals(itemId)) {
-                        int count = award.optInt("awardCount", 1);
-                        Log.farm("芭芭农场🎁七日礼包#获得[" + count + "g肥料]");
-                        Status.flagToday("orchardLotteryPlus", userId);
-                        return;
+                if (awardArray != null) {
+                    for (int i = 0; i < awardArray.length(); i++) {
+                        JSONObject award = awardArray.optJSONObject(i);
+                        if (award == null) {
+                            continue;
+                        }
+                        if (award.optString("itemId", "").equals(itemId)) {
+                            int count = award.optInt("awardCount", 1);
+                            Log.farm("芭芭农场🎁七日礼包#获得[" + count + "g肥料]");
+                            Status.flagToday("orchardLotteryPlus", userId);
+                            return;
+                        }
                     }
                 }
             }
@@ -1678,12 +1702,22 @@ public class AntOrchard extends ModelTask {
                 int targetCount = mainCount != null && mainCount >= 10 ? 10 : (mainCount != null && mainCount >= 3 ? 3 : 0);
 
                 if (targetCount > 0) {
-                    JSONObject extend = new JSONObject(activity.getString("extend"));
-                    JSONArray options = extend.getJSONArray("wishActivityOptionList");
+                    String extendStr = activity.optString("extend", "");
+                    if (extendStr.isEmpty()) {
+                        return;
+                    }
+                    JSONObject extend = new JSONObject(extendStr);
+                    JSONArray options = extend.optJSONArray("wishActivityOptionList");
+                    if (options == null) {
+                        return;
+                    }
 
                     for (int i = 0; i < options.length(); i++) {
-                        JSONObject option = options.getJSONObject(i);
-                        if (option.getInt("taskRequire") == targetCount) {
+                        JSONObject option = options.optJSONObject(i);
+                        if (option == null) {
+                            continue;
+                        }
+                        if (option.optInt("taskRequire", -1) == targetCount) {
                             String result = AntOrchardRpcCall.triggerSubplotsActivity(activityId, "WISH", option.getString("optionKey"));
                             if (MessageUtil.checkResultCode(TAG, new JSONObject(result))) {
                                 Log.farm("农场许愿✨许下承诺[每日施肥" + targetCount + "次]");
@@ -1818,7 +1852,7 @@ public class AntOrchard extends ModelTask {
 
     /**
      * 领取小组件回访/浏览奖励。
-     * <p>实测（2026-09-22 抓包 logs/chk_orchard 14:20:10，官方每次进入农场都会调）服务端返回
+     * <p>官方每次进入农场都会调，服务端返回
      * {@code {"canCollect":false,"manureCount":0,"needManualReceive":false,"success":true}}——
      * **没有 `orchardVisitAwardList` 结构**。原先按该字段解析，永远走"无奖励"分支并打误导性日志，
      * 调用点也因此被注释掉，导致这块奖励一直没领过。现按真实字段解析。

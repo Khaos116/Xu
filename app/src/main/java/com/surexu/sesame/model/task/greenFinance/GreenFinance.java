@@ -131,7 +131,8 @@ public class GreenFinance extends ModelTask {
         try {
             JSONObject joSelfCollect = new JSONObject(s);
             if (joSelfCollect.optBoolean("success")) {
-                int totalCollectPoint = joSelfCollect.getJSONObject("result").getInt("totalCollectPoint");
+                JSONObject collectResult = joSelfCollect.optJSONObject("result");
+                int totalCollectPoint = collectResult == null ? 0 : collectResult.optInt("totalCollectPoint", 0);
                 Log.other("绿色经营📊收集获得" + totalCollectPoint);
             } else {
                 Log.i(TAG + ".batchSelfCollect", joSelfCollect.optString("resultDesc"));
@@ -154,8 +155,8 @@ public class GreenFinance extends ModelTask {
                 Log.i(TAG + ".signIn.signInQuery", jo.optString("resultDesc"));
                 return;
             }
-            JSONObject result = jo.getJSONObject("result");
-            if (result.getBoolean("isTodaySignin")) {
+            JSONObject result = jo.optJSONObject("result");
+            if (result != null && result.optBoolean("isTodaySignin", false)) {
                 return;
             }
             s = GreenFinanceRpcCall.signInTrigger(sceneId);

@@ -26,6 +26,9 @@ public class AppConfig {
 
     public static final AppConfig INSTANCE = new AppConfig();
 
+    /** 本进程是否已打印过「加载APP配置」，避免启动多阶段重复初始化时刷重复日志 */
+    private static volatile boolean loadLogged = false;
+
     /** 上次 load 解析失败：内存此时只是默认值，必须禁止写盘，否则会把默认值整份固化 */
     private static volatile boolean loadFailed = false;
 
@@ -257,7 +260,8 @@ public class AppConfig {
                 // 导致「运行日志已关闭」时启动进程仍写入加载日志
                 // 仅主进程记录：子进程(tools/push/gpu/sandboxed_privilege/syntax)注入也会调用 load(),
                 // 不区分进程会在抓包记录里刷屏
-                if (ClassUtil.PACKAGE_NAME.equals(ApplicationHook.processName)) {
+                if (!loadLogged && ClassUtil.PACKAGE_NAME.equals(ApplicationHook.processName)) {
+                    loadLogged = true;
                     Log.debug("加载APP配置");
                 }
                 String formatted = toSaveStr();
